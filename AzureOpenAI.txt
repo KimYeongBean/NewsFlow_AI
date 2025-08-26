@@ -1,71 +1,200 @@
-from openai import AzureOpenAI
+import feedparser                 # 웹의 RSS/Atom 피드를 파싱하는 라이브러리
+import time                        # 시간 관련 함수를 제공하는 라이브러리
+import os                          # 운영체제와 상호작용하는 라이브러리
+from datetime import datetime, timedelta # 날짜와 시간을 다루는 모듈
+from urllib.parse import quote     # URL에 포함될 수 있는 특수 문자를 인코딩하는 함수
+from openai import AzureOpenAI     # Azure OpenAI API를 사용하기 위한 라이브러리
+import re                          # 정규 표현식 라이브러리
 
-# -----------------------------
-# 1. Azure OpenAI 정보 직접 입력
-# -----------------------------
-endpoint = "https://newscheck2.openai.azure.com/"
-deployment = "gpt-5-nano"
-subscription_key = "Dsf5DmuTn1cS7lXaSxSTnO30kTZCqr2xKqIjLwvdovEGnQsz3NjlJQQJ99BHACHYHv6XJ3w3AAABACOGJk53"
+# ================================
+# 1. 사용자 설정
+# ================================
+user_selected_sources = ["조선일보", "한겨레", "중앙일보", "동아일보", "경향신문"] # GPT가 신뢰도를 평가할 때 기준으로 삼을 언론사 목록
 
-# -----------------------------
-# 2. Azure OpenAI 클라이언트 초기화
-# -----------------------------
-client = AzureOpenAI(
+#위에 내용은 사용자 직접 설정할 수 있게 변경해야한다.(23번줄 뉴스 카테고리에서 직접 설정)
+
+user_follow_categories = ["정치", "경제"] # 사용자가 뉴스 수집을 원하는 대분류 카테고리
+
+#위에 내용은 사용자가 직접 설정할 수 있게 변경해야한다.(29번줄 카테코리에서 직접 설정)
+
+# ================================
+# 2. 전체 뉴스/카테고리
+# ================================
+all_sources = [
+    'MBC뉴스', '연합뉴스', '조선일보', '뉴스1', 'JTBC 뉴스',
+    '중앙일보', 'SBS 뉴스', 'YTN', '한겨레', '경향신문',
+    '오마이뉴스', '한국경제'
+] # 수집 대상에 포함될 수 있는 전체 언론사 목록
+
+categories = {
+    '정치': ['대통령실', '국회', '정당', '행정', '외교', '국방/북한'],
+    '경제': ['금융/증권', '산업/재계', '중기/벤처', '부동산', '글로벌', '생활'],
+    '사회': ['사건사고', '교육', '노동', '언론', '환경', '인권/복지', '식품/의료', '지역', '인물'],
+    'IT_과학': ['모바일', '인터넷/SNS', '통신/뉴미디어', 'IT', '보안/해킹', '컴퓨터', '게임/리뷰', '과학'],
+    '생활_문화': ['건강', '자동차', '여행/레저', '음식/맛집', '패션/뷰티', '공연/전시', '책', '종교', '날씨', '생활'],
+    '세계': ['아시아/호주', '미국/중남미', '유럽', '중동/아프리카', '세계']
+}
+
+MAX_ARTICLES_PER_CATEGORY = 100 # 한 세부 카테고리당 수집할 최대 기사 수
+save_path = 'D:/한국기술교육대학교/2025년 2학년 여름 계절/마이크로소프트 AI/텀프/output' # 뉴스를 저장할 폴더 경로
+
+#저장된 패치 폴더는 azure로 받아야 하기 때문에 임의로 아웃풋읏 지정한 거다.
+
+one_month_ago = datetime.now() - timedelta(days=30) # 현재 시간으로부터 30일 전의 날짜를 계산
+os.makedirs(save_path, exist_ok=True) # 저장 경로의 디렉터리가 없으면 생성하고, 이미 존재하면 무시
+
+# ================================
+# 3. Azure OpenAI 초기화
+# ================================
+endpoint = "https://newscheck2.openai.azure.com/" # Azure OpenAI 서비스의 접속 주소
+deployment = "gpt-5-nano"                         # 사용할 모델의 이름
+subscription_key = "Dsf5DmuTn1cS7lXaSxSTnO30kTZCqr2xKqIjLwvdovEGnQsz3NjlJQQJ99BHACHYHv6XJ3w3AAABACOGJk53" # API를 사용하기 위한 인증 키
+
+client = AzureOpenAI(                             # Azure OpenAI 클라이언트 객체 생성
     azure_endpoint=endpoint,
     api_key=subscription_key,
     api_version="2025-01-01-preview",
 )
 
-# -----------------------------
-# 3. 사용자 입력 예시
-# -----------------------------
-user_selected_sources = ["조선일보", "한겨레", "중앙일보", "동아일보", "경향신문"]
-news_to_check = """
-[검증할 뉴스 기사 내용]
-여기에 사용자가 확인하고 싶은 뉴스 본문을 넣습니다.
-"""
+# ================================
+# 4. 뉴스 수집 함수
+# ================================
+def fetch_news(sub_category, main_category): # 뉴스 수집 함수 정의
+    encoded_keyword = quote(sub_category)  # 한글 키워드를 URL 형식으로 변환
+    news_url = f"https://news.google.com/rss/search?q={encoded_keyword}&hl=ko&gl=KR" # 구글 뉴스 RSS 검색 URL 생성
+    feed = feedparser.parse(news_url)      # URL의 RSS 피드를 파싱하여 데이터 가져오기
 
-# -----------------------------
-# 4. GPT 프롬프트 구성
-# -----------------------------
-prompt_text = f"""
-사용자가 선택한 5개 언론사: {', '.join(user_selected_sources)}
-다음 뉴스 기사를 3줄로 요약하고, 선택한 5개 언론사 기준으로 비교해주세요. 
-- 비교 방법: 동일 이슈를 다룬 다른 핵심 언론사 기사와 핵심 주장 일치도 확인
-- 신뢰도 점수 계산: 100 - ((정정 보도 건수 + 가짜뉴스 건수) * 1.25)
-- 점수 등급:
-    - 높음: >= 70
-    - 보통: >= 40
-    - 낮음: < 40
-출력 형식:
-1) 3줄 요약
-2) 다른 언론사와 비교 결과
-3) 점수
-4) 신뢰도 등급
-"""
+    articles = []                          # 수집된 기사를 저장할 빈 리스트
+    saved_count = 0                        # 수집된 기사 수를 세는 카운터
 
-# -----------------------------
-# 5. 메시지 구성
-# -----------------------------
-messages = [
-    {"role": "user", "content": news_to_check},
-    {"role": "assistant", "content": prompt_text}
-]
+    for entry in feed.entries:             # RSS 피드의 각 기사 항목에 대해 반복
+        if saved_count >= MAX_ARTICLES_PER_CATEGORY: # 수집 기사 수가 최대치를 넘으면
+            break                          # 반복문을 중단
 
-# -----------------------------
-# 6. GPT 호출
-# -----------------------------
-try:
-    completion = client.chat.completions.create(
-        model=deployment,
-        messages=messages,
-        max_completion_tokens=2048,
-        stop=None
-    )
+        source_name = getattr(entry, 'source', None) # 기사 항목에서 언론사 정보를 가져옴
+        if source_name and source_name.title in all_sources: # 언론사 이름이 있고, 전체 언론사 목록에 있으면
+            published_time = entry.get('published_parsed')   # 기사 발행 시간을 가져옴
+            if not published_time:         # 발행 시간 정보가 없으면
+                continue                   # 다음 기사로 넘어감
+            article_date = datetime.fromtimestamp(time.mktime(published_time)) # 발행 시간을 datetime 객체로 변환
+            if article_date < one_month_ago: # 기사 발행일이 한 달보다 오래되었으면
+                continue                   # 다음 기사로 넘어감
 
-    result_text = completion.choices[0].message.content
-    print("===== GPT 결과 =====")
-    print(result_text)
+            articles.append({              # 필터링된 기사 정보를 딕셔너리 형태로 리스트에 추가
+                'title': entry.title,
+                'link': entry.link,
+                'source': source_name.title,
+                'date': article_date.strftime('%Y-%m-%d %H:%M:%S'),
+                'content': entry.title
+            })
+            saved_count += 1               # 수집된 기사 수 증가
 
-except Exception as e:
-    print("오류 발생:", e)
+    return articles                        # 수집된 기사 리스트 반환
+
+# ================================
+# 5. GPT 평가 함수
+# ================================
+def gpt_evaluate(article_text, selected_sources): # GPT 평가 함수 정의
+    prompt_text = f"""
+당신은 뉴스 요약 도우미입니다.
+사용자가 선택한 언론사: {', '.join(selected_sources)}
+
+아래 뉴스 제목 또는 본문을 기반으로:
+1) 3줄로 요약
+2) 선택한 언론사와 핵심 주장 비교
+3) 신뢰도 등급 출력 (반드시 아래 형식만 사용):
+    신뢰도: 높음 / 보통 / 낮음
+
+신뢰도 평가 기준:
+- 주요 언론사(조선일보, 한겨레, 중앙일보, 동아일보, 경향신문) → 높음
+- 제목만 존재하거나 일부 정보만 있는 경우 → 보통
+- 근거 부족/선정적/출처 불분명 → 낮음
+
+⚠️ 출력 형식을 반드시 지켜주세요.
+""" # GPT에게 요청할 프롬프트(지시사항) 정의
+
+    messages = [
+        {"role": "system", "content": "너는 뉴스 요약과 언론사 비교, 신뢰도 평가만 간단히 출력하는 도우미야."}, # AI의 역할을 설정
+        {"role": "user", "content": prompt_text}, # 사용자 프롬프트 전달
+        {"role": "user", "content": article_text} # 평가할 기사 내용 전달
+    ]
+
+    try:                                   # 예외 처리 시작
+        completion = client.chat.completions.create( # GPT API 호출
+            model=deployment,
+            messages=messages,
+            max_completion_tokens=1024
+        )
+        result_text = completion.choices[0].message.content.strip() # GPT 응답 텍스트 추출
+        return result_text                 # 결과 텍스트 반환
+    except Exception as e:                 # API 호출 중 오류 발생 시
+        return f"GPT 평가 오류: {e}"      # 오류 메시지 반환
+
+# ================================
+# 6. HTML 저장 함수 (수정)
+# ================================
+def save_news(main_category, sub_category, articles): # HTML 저장 함수 정의
+    main_path = os.path.join(save_path, main_category) # 대분류 이름으로 폴더 경로 생성
+    os.makedirs(main_path, exist_ok=True)  # 폴더가 없으면 생성
+    file_name = f"{sub_category.replace('/', '_')}_news.html" # 파일 이름 생성
+    full_path = os.path.join(main_path, file_name) # 전체 파일 경로 생성
+
+    with open(full_path, 'w', encoding='utf-8') as f: # HTML 파일을 쓰기 모드로 열기
+        f.write("<html><head><meta charset='utf-8'>") # HTML 기본 구조 작성
+        f.write("<style>")                 # CSS 스타일 시작
+        f.write("...")                     # 본문, 제목 등의 CSS 스타일 정의
+        f.write("</style></head><body>\n") # CSS 스타일 끝, 본문 시작
+
+        f.write(f"<h1>{main_category} - {sub_category}</h1>\n") # 페이지 제목 작성
+
+        for article in articles:           # 각 기사에 대해 반복
+            evaluation_text = article.get('evaluation', '') # 기사의 GPT 평가 결과 가져오기
+            
+            summary = ""                   # 요약을 담을 변수
+            reliability = ""               # 신뢰도를 담을 변수
+            
+            summary_match = re.search(r'1\)(.*?)(?=2\)|\Z)', evaluation_text, re.DOTALL) # 정규 표현식으로 요약 추출
+            reliability_match = re.search(r'신뢰도:\s*(높음|보통|낮음)', evaluation_text) # 정규 표현식으로 신뢰도 등급 추출
+
+            if summary_match:              # 요약 내용이 있으면
+                summary = summary_match.group(1).strip().replace("\n", "<br>") # 텍스트 정리 및 줄바꿈 처리
+            
+            if reliability_match:          # 신뢰도 등급이 있으면
+                reliability = reliability_match.group(1).strip() # 신뢰도 등급 추출
+            
+            f.write(f"<h3><a href='{article['link']}' target='_blank'>{article['title']}</a></h3>\n") # 기사 제목과 링크 작성
+            f.write(f"<p><b>언론사:</b> {article['source']} | <b>발행 시간:</b> {article['date']}</p>\n") # 언론사와 발행 시간 작성
+            
+            if summary:                    # 요약 내용이 있으면
+                if "높음" in reliability:
+                    reliability_class = "high" # 신뢰도 '높음'일 경우 CSS 클래스 지정
+                elif "보통" in reliability:
+                    reliability_class = "medium" # 신뢰도 '보통'일 경우 CSS 클래스 지정
+                else:
+                    reliability_class = "low" # 신뢰도 '낮음'일 경우 CSS 클래스 지정
+                    
+                f.write(f"<p class='summary'><b>3줄 요약:</b> {summary} <span class='reliability {reliability_class}'>신뢰도: {reliability}</span></p>\n") # 요약 및 신뢰도 작성
+            
+            f.write("<hr>\n")              # 기사 사이에 가로선 추가
+
+        f.write("</body></html>")          # HTML 본문 끝
+
+# ================================
+# 7. 메인 실행 루프
+# ================================
+for main_category, sub_categories in categories.items(): # 모든 카테고리에 대해 반복
+    if main_category not in user_follow_categories: # 사용자가 선택한 카테고리가 아니면
+        continue                                   # 다음 반복으로 넘어감
+
+    for sub_category in sub_categories:            # 각 대분류의 세부 카테고리에 대해 반복
+        print(f"[{main_category}] {sub_category} 뉴스 수집 중...") # 진행 상황 출력
+        articles = fetch_news(sub_category, main_category) # 뉴스 수집 함수 호출
+
+        for article in articles:                   # 수집된 각 기사에 대해 반복
+            article['evaluation'] = gpt_evaluate(article['content'], user_selected_sources) # GPT 평가 함수 호출 및 결과 저장
+            time.sleep(1)                          # API 호출 간 1초 지연 (서버 부담 완화)
+
+        save_news(main_category, sub_category, articles) # HTML 파일로 저장
+        print(f"  -> {len(articles)}개 뉴스 저장 완료") # 저장 완료 메시지 출력
+
+print("\n🎉 모든 뉴스 수집 및 GPT 평가 완료!") # 최종 완료 메시지 출력
