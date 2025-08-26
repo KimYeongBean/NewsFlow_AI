@@ -1,0 +1,159 @@
+import feedparser
+import time
+import os
+from datetime import datetime, timedelta
+from urllib.parse import quote
+from openai import AzureOpenAI
+
+# =============================
+# 1. 사용자 선택 변수 (UI 연동 가능)
+# =============================
+user_selected_sources = ["조선일보", "한겨레", "중앙일보", "동아일보", "경향신문"]  # 예시 5개 언론사
+user_follow_categories = ["정치", "경제"]  # 예시 팔로우 카테고리
+
+# =============================
+# 2. 전체 뉴스/카테고리 설정
+# =============================
+all_sources = [
+    'MBC뉴스', '연합뉴스', '조선일보', '뉴스1', 'JTBC 뉴스',
+    '중앙일보', 'SBS 뉴스', 'YTN', '한겨레', '경향신문',
+    '오마이뉴스', '한국경제'
+]
+
+categories = {
+    '정치': ['대통령실', '국회', '정당', '행정', '외교', '국방/북한'],
+    '경제': ['금융/증권', '산업/재계', '중기/벤처', '부동산', '글로벌', '생활'],
+    '사회': ['사건사고', '교육', '노동', '언론', '환경', '인권/복지', '식품/의료', '지역', '인물'],
+    'IT_과학': ['모바일', '인터넷/SNS', '통신/뉴미디어', 'IT', '보안/해킹', '컴퓨터', '게임/리뷰', '과학'],
+    '생활_문화': ['건강', '자동차', '여행/레저', '음식/맛집', '패션/뷰티', '공연/전시', '책', '종교', '날씨', '생활'],
+    '세계': ['아시아/호주', '미국/중남미', '유럽', '중동/아프리카', '세계']
+}
+
+MAX_ARTICLES_PER_CATEGORY = 100
+save_path = 'D:/한국기술교육대학교/2025년 2학년 여름 계절/마이크로소프트 AI/텀프/output'
+one_month_ago = datetime.now() - timedelta(days=30)
+os.makedirs(save_path, exist_ok=True)
+
+# =============================
+# 3. Azure OpenAI 초기화
+# =============================
+endpoint = "https://newscheck2.openai.azure.com/"
+deployment = "gpt-5-nano"
+subscription_key = "Dsf5DmuTn1cS7lXaSxSTnO30kTZCqr2xKqIjLwvdovEGnQsz3NjlJQQJ99BHACHYHv6XJ3w3AAABACOGJk53"
+
+client = AzureOpenAI(
+    azure_endpoint=endpoint,
+    api_key=subscription_key,
+    api_version="2025-01-01-preview",
+)
+
+# =============================
+# 4. 뉴스 수집 함수
+# =============================
+def fetch_news(sub_category, main_category):
+    encoded_keyword = quote(sub_category)
+    news_url = f"https://news.google.com/rss/search?q={encoded_keyword}&hl=ko&gl=KR"
+    feed = feedparser.parse(news_url)
+
+    articles = []
+    saved_count = 0
+
+    for entry in feed.entries:
+        if saved_count >= MAX_ARTICLES_PER_CATEGORY:
+            break
+
+        # 언론사 필터링
+        if hasattr(entry, 'source') and entry.source.title in all_sources:
+            published_time = entry.get('published_parsed')
+            if not published_time:
+                continue
+            article_date = datetime.fromtimestamp(time.mktime(published_time))
+            if article_date < one_month_ago:
+                continue
+
+            articles.append({
+                'title': entry.title,
+                'link': entry.link,
+                'source': entry.source.title,
+                'date': article_date.strftime('%Y-%m-%d %H:%M:%S'),
+                'content': entry.title  # 현재 RSS에는 본문이 없으므로 제목으로 대체 가능
+            })
+            saved_count += 1
+
+    return articles
+
+# =============================
+# 5. GPT 평가 함수
+# =============================
+def gpt_evaluate(article_text, selected_sources):
+    prompt_text = f"""
+사용자가 선택한 5개 언론사: {', '.join(selected_sources)}
+다음 뉴스 기사를 3줄로 요약하고, 선택한 5개 언론사 기준으로 비교해주세요.
+- 비교 방법: 동일 이슈를 다룬 다른 핵심 언론사 기사와 핵심 주장 일치도 확인
+- 신뢰도 점수 계산: 100 - ((정정 보도 건수 + 가짜뉴스 건수) * 1.25)
+- 점수 등급:
+    - 높음: >= 70
+    - 보통: >= 40
+    - 낮음: < 40
+출력 형식:
+1) 3줄 요약
+2) 다른 언론사와 비교 결과
+3) 점수
+4) 신뢰도 등급
+"""
+
+    messages = [
+        {"role": "user", "content": article_text},
+        {"role": "assistant", "content": prompt_text}
+    ]
+
+    try:
+        completion = client.chat.completions.create(
+            model=deployment,
+            messages=messages,
+            max_completion_tokens=2048,
+            stop=None
+        )
+        result_text = completion.choices[0].message.content
+        return result_text
+    except Exception as e:
+        return f"GPT 평가 오류: {e}"
+
+# =============================
+# 6. 파일 저장 함수
+# =============================
+def save_news(main_category, sub_category, articles):
+    main_path = os.path.join(save_path, main_category)
+    os.makedirs(main_path, exist_ok=True)
+    file_name = f"{sub_category.replace('/', '_')}_news.txt"
+    full_path = os.path.join(main_path, file_name)
+
+    with open(full_path, 'w', encoding='utf-8') as f:
+        for article in articles:
+            f.write(f"제목: {article['title']}\n")
+            f.write(f"언론사: {article['source']}\n")
+            f.write(f"링크: {article['link']}\n")
+            f.write(f"발행 시간: {article['date']}\n")
+            f.write("GPT 평가 결과:\n")
+            f.write(article.get('evaluation', '') + "\n")
+            f.write("-" * 50 + "\n\n")
+
+# =============================
+# 7. 메인 실행 루프
+# =============================
+for main_category, sub_categories in categories.items():
+    if main_category not in user_follow_categories:
+        continue  # 팔로우 안 한 카테고리 건너뜀
+
+    for sub_category in sub_categories:
+        print(f"[{main_category}] {sub_category} 뉴스 수집 중...")
+        articles = fetch_news(sub_category, main_category)
+
+        for article in articles:
+            article['evaluation'] = gpt_evaluate(article['content'], user_selected_sources)
+            time.sleep(1)  # 서버 부담 방지
+
+        save_news(main_category, sub_category, articles)
+        print(f"  -> {len(articles)}개 뉴스 저장 완료")
+
+print("\n🎉 모든 뉴스 수집 및 GPT 평가 완료!")
