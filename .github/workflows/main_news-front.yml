@@ -1,6 +1,10 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
+permissions:
+  id-token: write   # OIDC 토큰 발급
+  contents: read
+
 name: Build and deploy Node.js app to Azure Web App - news-front
 
 on:
@@ -63,3 +67,4 @@ jobs:
           app-name: 'news-front'
           slot-name: 'Production'
           package: . # 이 부분은 수정할 필요 없습니다. 위에서 전달받은 파일 전체를 의미합니다.
+
