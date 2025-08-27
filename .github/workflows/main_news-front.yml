@@ -56,9 +56,9 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_153115A9859948E99D093959B5A88B01 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_6E618F3A80B44D128808E29E3B8476BD }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_E109E16F20C24B198C7608CA1ABB03C9 }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
@@ -67,4 +67,5 @@ jobs:
           app-name: 'news-front'
           slot-name: 'Production'
           package: . # 이 부분은 수정할 필요 없습니다. 위에서 전달받은 파일 전체를 의미합니다.
+
 
