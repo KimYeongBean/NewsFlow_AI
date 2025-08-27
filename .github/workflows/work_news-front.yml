@@ -24,6 +24,7 @@ jobs:
           node-version: '22.x'
 
       - name: npm install, build, and test
+        working-directory: ./frontend  # <-- 1. 수정된 부분: 작업 폴더를 frontend로 지정
         run: |
           npm install
           npm run build --if-present
@@ -33,7 +34,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: .
+          path: ./frontend # <-- 2. 수정된 부분: frontend 폴더만 압축하여 전달
 
   deploy:
     runs-on: ubuntu-latest
@@ -61,5 +62,4 @@ jobs:
         with:
           app-name: 'news-front'
           slot-name: 'Production'
-          package: .
-          
+          package: . # 이 부분은 수정할 필요 없습니다. 위에서 전달받은 파일 전체를 의미합니다.
