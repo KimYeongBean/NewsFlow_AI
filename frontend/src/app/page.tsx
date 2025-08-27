@@ -1,151 +1,120 @@
-import NewsSection from '@/components/NewsSection';
-import { NewsArticle, NewsCategory } from '@/types';
 import fs from 'fs/promises';
 import path from 'path';
 import * as cheerio from 'cheerio';
+import { NewsArticle, LanguageCode, Reliability, Publisher, NewsCategory, NewsSubCategory } from '@/types';
 
-async function getNewsFromHtmlFiles(): Promise<NewsArticle[]> {
-  const newsDir = path.join(process.cwd(), 'public', 'news');
-  const allNews: NewsArticle[] = [];
-  // ▼▼▼ [수정] '알 수 없음'에 가장 낮은 정렬 순위(0)를 부여합니다. ▼▼▼
-  const reliabilityOrder: Record<NewsArticle['reliability'], number> = {
-    '높음': 3,
-    '보통': 2,
-    '낮음': 1,
-    '알 수 없음': 0
-  };
-  // ▲▲▲ [수정] ▲▲▲
+// 컴포넌트 import
+import NewsSection from '@/components/NewsSection';
+import FeaturedNews from '@/components/FeaturedNews';
+import LanguageSelector, { LanguageProvider } from '@/components/LanguageSelector';
+
+/**
+ * public/news 폴더 전체를 스캔하여 모든 HTML 파일을 파싱하는 함수
+ */
+async function getNewsFromHtml(): Promise<NewsArticle[]> {
+  const newsBaseDir = path.join(process.cwd(), 'public', 'news');
+  const allArticles: NewsArticle[] = [];
 
   try {
-    const categoryDirs = await fs.readdir(newsDir);
+    const categoryDirs = await fs.readdir(newsBaseDir, { withFileTypes: true });
 
-    for (const category of categoryDirs) {
-      const categoryPath = path.join(newsDir, category);
-      const stats = await fs.stat(categoryPath);
-
-      if (stats.isDirectory()) {
+    for (const categoryDir of categoryDirs) {
+      if (categoryDir.isDirectory()) {
+        const category = categoryDir.name as NewsCategory;
+        const categoryPath = path.join(newsBaseDir, category);
         const files = await fs.readdir(categoryPath);
+
         for (const file of files) {
-          if (file.endsWith('.html')) {
+          if (path.extname(file) === '.html') {
+            const subCategory = path.basename(file, '_news.html').replace(/_/g, '/') as NewsSubCategory;
             const filePath = path.join(categoryPath, file);
             const htmlContent = await fs.readFile(filePath, 'utf-8');
             const $ = cheerio.load(htmlContent);
 
-            $('body h3').each((i, el) => {
-              const titleElement = $(el).find('a');
-              const infoElement = $(el).next('p');
-              const summaryElement = infoElement.next('p.summary');
+            $('.article-block').each((_, element) => {
+              const headerText = $(element).find('p > b').parent().text();
+              const sourceMatch = headerText.match(/언론사:\s*(.*?)\s*\|/);
+              const dateMatch = headerText.match(/발행 시간:\s*(.*)/);
 
-              const title = titleElement.text();
-              const link = titleElement.attr('href') || '#';
+              const source = sourceMatch ? sourceMatch[1].trim() as Publisher : '알 수 없음';
+              const dateString = dateMatch ? dateMatch[1].trim() : new Date().toISOString();
+              const formattedDateString = dateString.replace(/(\d{4})\.(\d{2})\.(\d{2})\s(\d{2}):(\d{2})/, '$1-$2-$3T$4:$5:00');
+              const date = new Date(formattedDateString).toISOString();
+
+              const link = $(element).find('h3 a').attr('href') || '#';
               
-              const infoText = infoElement.text();
-              const sourceMatch = infoText.match(/언론사:\s*([^|]+)/);
-              const dateMatch = infoText.match(/발행 시간:\s*(.*)/);
+              const summaryElement = $(element).find('.content.ko .summary');
+              const reliabilitySpan = summaryElement.find('.reliability').clone();
+              summaryElement.find('.reliability').remove();
+              const summary = summaryElement.text().trim() || "요약 정보 없음";
               
-              const summaryHtml = summaryElement.html() || '';
-              const reliabilitySpan = summaryElement.find('span.reliability').text();
-              summaryElement.find('span.reliability').remove();
-              const summary = summaryElement.text().replace('3줄 요약:', '').trim();
-
-              // ▼▼▼ [수정] 신뢰도 파싱 로직 변경 ▼▼▼
-              let reliabilityValue: NewsArticle['reliability'] = '알 수 없음'; // 기본값을 '알 수 없음'으로 설정
-              const reliabilityMatch = reliabilitySpan.match(/신뢰도:\s*(높음|보통|낮음)/);
-              if (reliabilityMatch) {
-                reliabilityValue = reliabilityMatch[1].trim() as NewsArticle['reliability'];
-              }
+              const reliabilityMatch = reliabilitySpan.text().match(/신뢰도:\s*(.*)/);
+              const reliability = reliabilityMatch ? reliabilityMatch[1].trim() as Reliability : '알 수 없음';
+              
+              // ▼▼▼ [수정] 모든 언어의 제목을 올바르게 추출하도록 로직을 변경합니다. ▼▼▼
+              const translatedTitles = {} as Record<LanguageCode, string>;
+              $(element).find('.content').each((_, contentEl) => {
+                const classList = $(contentEl).attr('class')?.split(' ') || [];
+                // 클래스 리스트에서 언어 코드를 찾습니다. (예: 'ko', 'en', 'ja')
+                const lang = classList.find(c => c !== 'content' && c !== 'active') as LanguageCode;
+                if (lang) {
+                  // 각 언어 블록('.content') 내부의 h3 태그에서 제목을 직접 가져옵니다.
+                  const title = $(contentEl).find('h3 a').text().trim();
+                  if (title) {
+                    translatedTitles[lang] = title;
+                  }
+                }
+              });
               // ▲▲▲ [수정] ▲▲▲
-
-              // ▼▼▼ [수정] 신뢰도가 없어도 제목, 링크 등 기본 정보만 있으면 기사로 포함시킵니다. ▼▼▼
-              if (title && link && sourceMatch && dateMatch) {
-                const article: NewsArticle = {
-                  category: category as NewsCategory,
-                  title,
-                  link,
-                  source: sourceMatch[1].trim() as NewsArticle['source'],
-                  date: dateMatch[1].trim(),
-                  summary,
-                  reliability: reliabilityValue,
-                };
-                allNews.push(article);
-              }
-              // ▲▲▲ [수정] ▲▲▲
+              
+              allArticles.push({
+                category,
+                subCategory,
+                link,
+                source,
+                date,
+                summary,
+                reliability,
+                translatedTitles, // 모든 언어 제목이 포함된 객체
+                evaluation: ''
+              });
             });
           }
         }
       }
     }
+    allArticles.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return allArticles;
   } catch (error) {
-    console.error("뉴스 데이터를 읽어오는 중 오류가 발생했습니다:", error);
+    console.error("HTML 파일 처리 중 오류 발생:", error);
     return [];
   }
-  
-  allNews.sort((a, b) => {
-    const reliabilityDiff = reliabilityOrder[b.reliability] - reliabilityOrder[a.reliability];
-    if (reliabilityDiff !== 0) {
-      return reliabilityDiff;
-    }
-    return new Date(b.date).getTime() - new Date(a.date).getTime();
-  });
-
-  return allNews;
 }
 
-export default async function NewsHomepage() {
-  const allNews = await getNewsFromHtmlFiles() || [];
-  const breakingNews = allNews.slice(0, 4);
+export default async function HomePage() {
+  const allNews = await getNewsFromHtml();
 
   return (
-    <>
-      <header className="bg-white py-4 flex items-center justify-between px-8 border-b">
-        <h1 className="text-2xl font-extrabold text-blue-600">NEWS FLOW</h1>
-        <div className="relative">
-          <input type="text" placeholder="뉴스 검색..." className="border rounded-full py-2 px-4 w-64" />
-          <button className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-            🔍
-          </button>
-        </div>
-      </header>
-      
-      <section className="bg-blue-800 text-white p-8">
-        <h2 className="text-3xl font-bold mb-4 text-center">BREAKING NEWS</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {breakingNews.map(news => (
-            <a 
-              href={news.link}
-              key={news.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-blue-700 p-4 rounded-lg hover:bg-blue-600 transition-colors flex flex-col"
-            >
-              <span className="text-sm font-semibold bg-yellow-400 text-blue-900 px-2 py-1 rounded-full self-start mb-2">
-                {news.category}
-              </span>
-              <h3 className="font-bold text-lg flex-grow">
-                {news.title}
-              </h3>
-              <p className="text-xs text-blue-200 mt-2 self-end">
-                {news.source}
-              </p>
-            </a>
-          ))}
-        </div>
-      </section>
+    <LanguageProvider>
+      <div className="container mx-auto">
+        <header className="text-center py-10 bg-white">
+          <h1 className="text-4xl font-extrabold text-gray-800">NewsFlow AI</h1>
+          <p className="text-lg text-gray-500 mt-2">AI와 함께하는 스마트한 뉴스 소비</p>
+        </header>
 
-      <NewsSection allNews={allNews} />
+        <LanguageSelector />
+        
+        <FeaturedNews articles={allNews} />
 
-      <footer className="bg-gray-800 py-6 px-8 text-center text-gray-400">
-        <div className="max-w-screen-xl mx-auto flex flex-col md:flex-row justify-between items-center">
-            <ul className="flex space-x-6 mb-4 md:mb-0">
-              <li><a href="#" className="hover:text-white">회사소개</a></li>
-              <li><a href="#" className="hover:text-white">연락처</a></li>
-              <li><a href="#" className="hover:text-white">개인정보보호정책</a></li>
-            </ul>
-            <div className="text-gray-500">
-              © 2025 News Flow. All Rights Reserved.
-            </div>
-        </div>
-      </footer>
-    </>
+        {allNews.length > 0 ? (
+          <NewsSection allNews={allNews} />
+        ) : (
+          <div className="text-center py-20">
+            <p className="text-xl text-gray-500">표시할 뉴스가 없습니다.</p>
+            <p className="text-md text-gray-400 mt-2">`newsaidi.py`를 실행하여 `public/news/` 폴더에 HTML 파일들을 생성했는지 확인해주세요.</p>
+          </div>
+        )}
+      </div>
+    </LanguageProvider>
   );
 }
