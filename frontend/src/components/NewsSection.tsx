@@ -45,7 +45,7 @@ export default function NewsSection() {
 
         const data: ApiResponse[] = await response.json();
         setNewsData(data);
-      } catch (err: any) {
+      } catch (err) {
         setError(err.message);
       } finally {
         setIsLoading(false);
