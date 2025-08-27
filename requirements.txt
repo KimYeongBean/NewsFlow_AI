@@ -1,0 +1,12 @@
+# FastAPI 웹 프레임워크와 웹 서버
+fastapi
+uvicorn[standard]
+
+# 데이터 유효성 검사 (Pydantic은 FastAPI 설치 시 자동으로 포함될 수 있으나, 명시적으로 추가)
+pydantic
+
+# Google 뉴스 RSS 피드 파싱
+feedparser
+
+# Azure OpenAI SDK
+openai
