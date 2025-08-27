@@ -35,9 +35,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: python-app
-          path: |
-            backend/             # <-- 2. 수정: backend 폴더 전체를 업로드
-            !backend/venv/       # 단, 가상환경(venv) 폴더는 제외
+          path: ./backend
 
   deploy:
     runs-on: ubuntu-latest
@@ -66,3 +64,4 @@ jobs:
           app-name: 'news-web'
           slot-name: 'Production'
           package: . #
+
