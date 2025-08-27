@@ -1,13 +1,30 @@
-// 언론사 타입을 미리 정의
-export type Publisher = 'KBS' | 'MBC' | 'SBS' | '헤럴드경제' | '한겨레' | '조선일보' | '뉴스1' | '연합뉴스' | '비즈니스포스트' | '채널A' | 'MBN 홈페이지' | '쿠키뉴스' | '프레시안' | 'IT조선' | '컬처데일리';
+export type Publisher =
+  | 'MBC뉴스'
+  | '연합뉴스'
+  | '조선일보'
+  | '뉴스1'
+  | 'JTBC 뉴스'
+  | '중앙일보'
+  | 'SBS 뉴스'
+  | 'YTN'
+  | '한겨레'
+  | '경향신문'
+  | '오마이뉴스'
+  | '한국경제';
+
+// ▼▼▼ [수정] '알 수 없음' 상태를 추가합니다. ▼▼▼
+export type Reliability = '높음' | '보통' | '낮음' | '알 수 없음';
+// ▲▲▲ [수정] ▲▲▲
+
+export type NewsCategory = '정치' | '경제' | '사회' | 'IT_과학' | '생활_문화' | '세계';
 
 export type NewsArticle = {
-  id: number;
-  category: '경제' | '사회' | '정치' | 'IT/기술' | '문화' | '세계';
-  imageSrc: string;
-  publisher: Publisher; // 'string' 대신 미리 정의한 'Publisher' 타입을 사용
+  category: NewsCategory;
   title: string;
-  description: string;
   link: string;
-  publishedDate: string;
+  source: Publisher;
+  date: string;
+  summary: string;
+  reliability: Reliability;
+  evaluation?: string;
 };
