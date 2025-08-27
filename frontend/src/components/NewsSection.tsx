@@ -1,92 +1,105 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import NewsCard from '@/components/NewsCard';
-import { NewsArticle, Publisher } from '@/types';
+import { NewsArticle } from '@/types';
 
-interface NewsSectionProps {
-  allNews: NewsArticle[];
+// 백엔드 API로부터 받은 데이터 타입
+interface ApiResponse {
+  category: string;
+  sub_category: string;
+  articles: NewsArticle[];
 }
 
-const CATEGORIES: NewsArticle['category'][] = ['경제', '사회', '정치', 'IT/기술', '문화', '세계'];
-const PUBLISHERS: Publisher[] = ['KBS', 'MBC', 'SBS', '헤럴드경제', '한겨레'];
+const CATEGORIES: NewsArticle['category'][] = ['정치', '경제', '사회', 'IT/기술', '생활_문화', '세계'];
+const TRUSTED_SOURCES = ["조선일보", "한겨레", "중앙일보", "동아일보", "경향신문"]; // 신뢰도 평가 기준 언론사
 
-export default function NewsSection({ allNews }: NewsSectionProps) {
-  const [selectedCategory, setSelectedCategory] = useState<NewsArticle['category']>('경제');
-  const [selectedPublisher, setSelectedPublisher] = useState<Publisher>('KBS');
+export default function NewsSection() {
+  const [selectedCategory, setSelectedCategory] = useState<NewsArticle['category']>('정치');
+  const [newsData, setNewsData] = useState<ApiResponse[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const categoryFilteredNews = allNews.filter(news => news.category === selectedCategory);
-  const publisherFilteredNews = allNews.filter(news => news.publisher === selectedPublisher);
+  useEffect(() => {
+    const fetchNews = async () => {
+      setIsLoading(true);
+      setError(null);
+      setNewsData([]); // 카테고리 변경 시 기존 데이터 초기화
+
+      try {
+        const response = await fetch(`http://127.0.0.1:8000/api/analyze`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            categories: [selectedCategory],
+            trusted_sources: TRUSTED_SOURCES,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.detail || '뉴스 데이터를 불러오는 데 실패했습니다.');
+        }
+
+        const data: ApiResponse[] = await response.json();
+        setNewsData(data);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchNews();
+  }, [selectedCategory]); // selectedCategory가 변경될 때마다 API 호출
 
   return (
-    <>
-      {/* --- 분야별 뉴스 섹션 --- */}
-      <main className="bg-gray-50 pt-8 overflow-hidden"> {/* ✅ STEP 1: overflow-hidden 추가 */}
-        <nav className="bg-white py-3 border-b shadow-sm px-8"> {/* px-8 추가 */}
-          <ul className="flex justify-center space-x-8 font-semibold">
-            {CATEGORIES.map(category => (
-              <li key={category}>
-                <button
-                  onClick={() => setSelectedCategory(category)}
-                  className={`pb-1 hover:text-blue-600 ${selectedCategory === category
-                      ? 'text-blue-600 border-b-2 border-blue-600'
-                      : 'text-gray-600'
-                    }`}
-                >
-                  {category}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-        {/* ✅ STEP 2: 기존 grid를 flex 기반의 가로 스크롤 컨테이너로 변경 */}
-        <section className="flex overflow-x-auto py-8 px-8 space-x-6 scrollbar-hide">
-          {categoryFilteredNews.map((news) => (
-            // ✅ STEP 3: 각 뉴스 카드의 너비를 고정하고, 줄어들지 않도록 설정
-            <div key={news.id} className="w-80 flex-shrink-0">
-              <a href={news.link} target="_blank" rel="noopener noreferrer" className="block h-full">
-                <NewsCard news={news} />
-              </a>
-            </div>
-          ))}
-        </section>
-      </main>
-
-      <hr className="border-gray-200" />
-
-      {/* --- 언론사별 뉴스 섹션 --- */}
-      <main className="bg-gray-50 pt-8 overflow-hidden"> {/* ✅ STEP 1: overflow-hidden 추가 */}
-        <section className="mb-8 px-8"> {/* px-8 추가 */}
-          <h2 className="text-2xl font-bold mb-4 text-center">언론사별 뉴스</h2>
-          <div className="flex justify-center space-x-4">
-            {PUBLISHERS.map(publisher => (
+    <main className="bg-gray-50 pt-8 pb-12">
+      <nav className="bg-white py-3 border-b shadow-sm px-8 sticky top-0 z-10">
+        <ul className="flex justify-center space-x-8 font-semibold">
+          {CATEGORIES.map(category => (
+            <li key={category}>
               <button
-                key={publisher}
-                onClick={() => setSelectedPublisher(publisher)}
-                className={`px-4 py-2 rounded-full font-semibold transition-colors ${
-                  selectedPublisher === publisher
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-100 shadow-sm'
+                onClick={() => setSelectedCategory(category)}
+                className={`pb-1 hover:text-blue-600 transition-colors duration-200 ${
+                  selectedCategory === category
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-600'
                 }`}
               >
-                {publisher}
+                {category.replace('_', '/')}
               </button>
-            ))}
-          </div>
-        </section>
-        
-        {/* ✅ STEP 2: 여기도 동일하게 가로 스크롤 컨테이너로 변경 */}
-        <section className="flex overflow-x-auto py-8 px-8 space-x-6 scrollbar-hide">
-          {publisherFilteredNews.map((news) => (
-            // ✅ STEP 3: 각 뉴스 카드의 너비를 고정하고, 줄어들지 않도록 설정
-            <div key={news.id} className="w-80 flex-shrink-0">
-              <a href={news.link} target="_blank" rel="noopener noreferrer" className="block h-full">
-                <NewsCard news={news} />
-              </a>
-            </div>
+            </li>
           ))}
-        </section>
-      </main>
-    </>
+        </ul>
+      </nav>
+
+      <div className="px-8 mt-8">
+        {isLoading ? (
+          <div className="text-center py-20">
+            <p className="text-lg font-semibold text-gray-600">AI가 뉴스를 분석하고 있습니다...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-20">
+            <p className="text-lg font-semibold text-red-600">오류: {error}</p>
+          </div>
+        ) : (
+          newsData.map((section, index) => (
+            <section key={index} className="mb-12">
+              <h2 className="text-2xl font-bold mb-4 text-gray-800 border-l-4 border-blue-600 pl-3">
+                {section.sub_category}
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {section.articles.map((news, newsIndex) => (
+                  <NewsCard key={newsIndex} news={news} />
+                ))}
+              </div>
+            </section>
+          ))
+        )}
+      </div>
+    </main>
   );
 }
