@@ -11,19 +11,19 @@ const formatDate = (dateString: string) => {
   return `${year}.${month}.${day} ${hours}:${minutes}`;
 };
 
-// 신뢰도에 따른 CSS 클래스를 반환하는 함수
-const getReliabilityClass = (reliability: Reliability) => {
+// 신뢰도에 따른 '배경색' CSS 클래스를 반환하는 함수
+const getReliabilityBgClass = (reliability: Reliability) => {
   switch (reliability) {
     case '높음':
-      return 'text-green-600';
+      return 'bg-green-600';
     case '보통':
-      return 'text-yellow-600';
+      return 'bg-yellow-600';
     case '낮음':
-      return 'text-red-600';
+      return 'bg-red-600';
     case '알 수 없음':
-      return 'text-gray-400';
+      return 'bg-gray-400';
     default:
-      return 'text-gray-500';
+      return 'bg-gray-500';
   }
 };
 
@@ -41,12 +41,11 @@ interface NewsCardProps {
 export default function NewsCard({ link, title, source, date, summary, reliability, imageUrl }: NewsCardProps) {
   return (
     <article className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 h-full flex flex-col">
-      {/* ▼▼▼ [수정] 신뢰도와 날짜 정보를 이미지 영역보다 위로 이동하고 스타일을 조정합니다. ▼▼▼ */}
-      <div className="flex justify-between items-center text-xs text-gray-500 px-4 pt-2 pb-2 border-b bg-white rounded-t-lg">
-        <span className={`font-bold ${getReliabilityClass(reliability)}`}>
+      {/* ▼▼▼ [수정] 날짜를 제거하고 신뢰도만 표시하도록 변경합니다. ▼▼▼ */}
+      <div className={`flex justify-start items-center text-xs px-4 py-3 text-white rounded-t-lg ${getReliabilityBgClass(reliability)}`}>
+        <span className="font-bold">
           신뢰도: {reliability}
         </span>
-        <time dateTime={date}>{formatDate(date)}</time>
       </div>
       {/* ▲▲▲ [수정] ▲▲▲ */}
 
@@ -61,17 +60,6 @@ export default function NewsCard({ link, title, source, date, summary, reliabili
       </div>
 
       <div className="p-4 flex flex-col flex-grow">
-        {/* ▼▼▼ [수정] 기존 위치의 신뢰도/날짜 정보는 삭제됩니다. ▼▼▼ */}
-        {/*
-        <div className="text-xs text-gray-500 flex justify-between items-center mb-2">
-          <span className={`font-bold ${getReliabilityClass(reliability)}`}>
-            신뢰도: {reliability}
-          </span>
-          <time dateTime={date}>{formatDate(date)}</time>
-        </div>
-        */}
-        {/* ▲▲▲ [수정] ▲▲▲ */}
-
         <span className="uppercase text-blue-600 font-semibold text-xs mb-1">
           {source}
         </span>
@@ -85,6 +73,12 @@ export default function NewsCard({ link, title, source, date, summary, reliabili
         <p className="text-gray-600 text-sm line-clamp-3 mb-4 flex-grow">
           {summary}
         </p>
+
+        {/* ▼▼▼ [수정] 날짜를 카드 하단에 새로 추가하고 font-bold를 적용합니다. ▼▼▼ */}
+        <div className="mt-auto pt-2 border-t text-right text-xs text-black-500">
+            <time dateTime={date} className="font-bold">{formatDate(date)}</time>
+        </div>
+        {/* ▲▲▲ [수정] ▲▲▲ */}
       </div>
     </article>
   );
