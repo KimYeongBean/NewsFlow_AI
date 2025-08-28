@@ -35,14 +35,20 @@ interface NewsCardProps {
   date: string;
   summary: string;
   reliability: Reliability;
+  imageUrl?: string;
 }
 
-export default function NewsCard({ link, title, source, date, summary, reliability }: NewsCardProps) {
+export default function NewsCard({ link, title, source, date, summary, reliability, imageUrl }: NewsCardProps) {
   return (
     <article className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 h-full flex flex-col">
       <div className="relative w-full h-40 bg-gray-200 flex items-center justify-center">
-        {/* 이미지가 없으므로 플레이스홀더를 표시합니다. */}
-        <span className="text-gray-400 text-sm">이미지 없음</span>
+        {imageUrl ? (
+          <img src={imageUrl} alt={title} className="w-full h-full object-cover" />
+        ) : (
+          <div className="flex items-center justify-center w-full h-full">
+            <span className="text-gray-400 text-sm">이미지 없음</span>
+          </div>
+        )}
       </div>
 
       <div className="p-4 flex flex-col flex-grow">
