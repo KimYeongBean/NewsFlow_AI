@@ -1,7 +1,4 @@
-import fs from 'fs/promises';
-import path from 'path';
-import * as cheerio from 'cheerio';
-import { NewsArticle, LanguageCode, Reliability, Publisher, NewsCategory, NewsSubCategory } from '@/types';
+import { NewsArticle } from '@/types';
 
 // 컴포넌트 import
 import NewsSection from '@/components/NewsSection';
@@ -9,91 +6,44 @@ import FeaturedNews from '@/components/FeaturedNews';
 import LanguageSelector, { LanguageProvider } from '@/components/LanguageSelector';
 
 /**
- * public/news 폴더 전체를 스캔하여 모든 HTML 파일을 파싱하는 함수
+ * 백엔드 API에서 뉴스 데이터를 가져오는 함수
  */
-async function getNewsFromHtml(): Promise<NewsArticle[]> {
-  const newsBaseDir = path.join(process.cwd(), 'public', 'news');
-  const allArticles: NewsArticle[] = [];
+async function getNewsFromApi(): Promise<NewsArticle[]> {
+  // 환경 변수에서 백엔드 API URL을 가져옵니다.
+  // 로컬 개발 시에는 .env.local 파일에 NEXT_PUBLIC_API_URL=http://127.0.0.1:8000 와 같이 설정합니다.
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+  if (!apiUrl) {
+    console.error("오류: NEXT_PUBLIC_API_URL 환경 변수가 설정되지 않았습니다.");
+    // 환경 변수가 없을 경우 빈 배열을 반환하여 페이지가 깨지는 것을 방지합니다.
+    return [];
+  }
 
   try {
-    const categoryDirs = await fs.readdir(newsBaseDir, { withFileTypes: true });
+    // Next.js 13+의 확장된 fetch를 사용하여 데이터를 가져오고 캐싱합니다.
+    // { next: { revalidate: 600 } }는 10분(600초)마다 데이터를 새로고침하도록 설정합니다.
+    const res = await fetch(`${apiUrl}/api/news`, { next: { revalidate: 600 } });
 
-    for (const categoryDir of categoryDirs) {
-      if (categoryDir.isDirectory()) {
-        const category = categoryDir.name as NewsCategory;
-        const categoryPath = path.join(newsBaseDir, category);
-        const files = await fs.readdir(categoryPath);
-
-        for (const file of files) {
-          if (path.extname(file) === '.html') {
-            const subCategory = path.basename(file, '_news.html').replace(/_/g, '/') as NewsSubCategory;
-            const filePath = path.join(categoryPath, file);
-            const htmlContent = await fs.readFile(filePath, 'utf-8');
-            const $ = cheerio.load(htmlContent);
-
-            $('.article-block').each((_, element) => {
-              const headerText = $(element).find('p > b').parent().text();
-              const sourceMatch = headerText.match(/언론사:\s*(.*?)\s*\|/);
-              const dateMatch = headerText.match(/발행 시간:\s*(.*)/);
-
-              const source = sourceMatch ? sourceMatch[1].trim() as Publisher : '알 수 없음';
-              const dateString = dateMatch ? dateMatch[1].trim() : new Date().toISOString();
-              const formattedDateString = dateString.replace(/(\d{4})\.(\d{2})\.(\d{2})\s(\d{2}):(\d{2})/, '$1-$2-$3T$4:$5:00');
-              const date = new Date(formattedDateString).toISOString();
-
-              const link = $(element).find('h3 a').attr('href') || '#';
-              const imageUrl = $(element).find('.article-image').attr('src');
-              const summaryElement = $(element).find('.content.ko .summary');
-              const reliabilitySpan = summaryElement.find('.reliability').clone();
-              summaryElement.find('.reliability').remove();
-              const summary = summaryElement.text().trim() || "요약 정보 없음";
-              
-              const reliabilityMatch = reliabilitySpan.text().match(/신뢰도:\s*(.*)/);
-              const reliability = reliabilityMatch ? reliabilityMatch[1].trim() as Reliability : '알 수 없음';
-              
-              // ▼▼▼ [수정] 모든 언어의 제목을 올바르게 추출하도록 로직을 변경합니다. ▼▼▼
-              const translatedTitles = {} as Record<LanguageCode, string>;
-              $(element).find('.content').each((_, contentEl) => {
-                const classList = $(contentEl).attr('class')?.split(' ') || [];
-                // 클래스 리스트에서 언어 코드를 찾습니다. (예: 'ko', 'en', 'ja')
-                const lang = classList.find(c => c !== 'content' && c !== 'active') as LanguageCode;
-                if (lang) {
-                  // 각 언어 블록('.content') 내부의 h3 태그에서 제목을 직접 가져옵니다.
-                  const title = $(contentEl).find('h3 a').text().trim();
-                  if (title) {
-                    translatedTitles[lang] = title;
-                  }
-                }
-              });
-              // ▲▲▲ [수정] ▲▲▲
-              
-              allArticles.push({
-                category,
-                subCategory,
-                link,
-                source,
-                date,
-                summary,
-                reliability,
-                translatedTitles,
-                imageUrl: imageUrl || undefined, // 추출한 이미지 URL 추가
-                evaluation: ''
-              });
-            });
-          }
-        }
-      }
+    if (!res.ok) {
+      // API 응답이 실패했을 경우 에러를 기록하고 빈 배열을 반환합니다.
+      console.error(`API 호출 실패: ${res.status} ${res.statusText}`);
+      return [];
     }
-    allArticles.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    return allArticles;
+
+    const data: NewsArticle[] = await res.json();
+    // 날짜 순으로 정렬 (API에서 이미 정렬했지만, 한 번 더 확인)
+    data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return data;
+
   } catch (error) {
-    console.error("HTML 파일 처리 중 오류 발생:", error);
+    console.error("뉴스 데이터 fetch 중 네트워크 또는 기타 오류 발생:", error);
+    // 네트워크 오류 등이 발생했을 경우 빈 배열을 반환합니다.
     return [];
   }
 }
 
 export default async function HomePage() {
-  const allNews = await getNewsFromHtml();
+  const allNews = await getNewsFromApi();
 
   return (
     <LanguageProvider>
@@ -112,7 +62,7 @@ export default async function HomePage() {
         ) : (
           <div className="text-center py-20">
             <p className="text-xl text-gray-500">표시할 뉴스가 없습니다.</p>
-            <p className="text-md text-gray-400 mt-2">`newsaidi.py`를 실행하여 `public/news/` 폴더에 HTML 파일들을 생성했는지 확인해주세요.</p>
+            <p className="text-md text-gray-400 mt-2">백엔드 서버가 실행 중인지, 또는 뉴스 데이터가 정상적으로 수집되었는지 확인해주세요.</p>
           </div>
         )}
       </div>
