@@ -514,6 +514,33 @@ async def process_and_save_news(main_category: str, sub_category: str):
     try:
         for entry in feed.entries[:5]:
             try:
+                # Early original URL resolution for logging and to avoid later Google-preview images
+                original = None
+                links = getattr(entry, 'links', None)
+                if links:
+                    for l in links:
+                        href = l.get('href') or l.get('link')
+                        if href and href.startswith('http') and 'news.google.com' not in href:
+                            original = href
+                            break
+                if not original and getattr(entry, 'summary', None):
+                    soup_summary = BeautifulSoup(entry.summary, 'html.parser')
+                    a_tag = soup_summary.find('a', href=True)
+                    if a_tag and a_tag['href']:
+                        href = a_tag['href']
+                        if href.startswith('/'):
+                            href = urljoin(getattr(entry, 'link', ''), href)
+                        original = href
+                # if still not found, try quick requests-based resolution (may perform one request)
+                if not original:
+                    try:
+                        tmp_info = get_original_article_info(getattr(entry, 'link', ''))
+                        original = tmp_info.get('original_url')
+                    except Exception:
+                        original = None
+
+                print(f"[DEBUG] 사전 원문 변환 결과: {original}")
+
                 source = getattr(entry, 'source', {}).get('title', '알 수 없음')
                 published_time = entry.get('published_parsed')
 
@@ -680,6 +707,33 @@ async def process_and_save_news_v2(main_category: str, sub_category: str):
 
     for entry in feed.entries[:5]:
         try:
+            # Early original URL resolution for logging and to avoid later Google-preview images
+            original = None
+            links = getattr(entry, 'links', None)
+            if links:
+                for l in links:
+                    href = l.get('href') or l.get('link')
+                    if href and href.startswith('http') and 'news.google.com' not in href:
+                        original = href
+                        break
+            if not original and getattr(entry, 'summary', None):
+                soup_summary = BeautifulSoup(entry.summary, 'html.parser')
+                a_tag = soup_summary.find('a', href=True)
+                if a_tag and a_tag['href']:
+                    href = a_tag['href']
+                    if href.startswith('/'):
+                        href = urljoin(getattr(entry, 'link', ''), href)
+                    original = href
+            # if still not found, try quick requests-based resolution (may perform one request)
+            if not original:
+                try:
+                    tmp_info = get_original_article_info(getattr(entry, 'link', ''))
+                    original = tmp_info.get('original_url')
+                except Exception:
+                    original = None
+
+            print(f"[DEBUG] 사전 원문 변환 결과: {original}")
+
             source = getattr(entry, 'source', {}).get('title', '알 수 없음')
             published_time = entry.get('published_parsed')
             if debug:
@@ -715,8 +769,11 @@ async def process_and_save_news_v2(main_category: str, sub_category: str):
 
             if not original:
                 article_info = get_original_article_info(getattr(entry, 'link', ''))
+                # print resolved original for immediate visibility
+                print(f"[DEBUG] 사전 원문 변환 결과(v2): {article_info.get('original_url')}")
             else:
                 article_info = {'original_url': original, 'image_url': None}
+                print(f"[DEBUG] 사전 원문 변환 결과(v2): {original}")
 
             # hybrid image extraction if needed
             if not article_info.get('image_url'):
@@ -854,6 +911,20 @@ def get_news(category: Optional[str] = None, limit: int = 50):
         return []
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"뉴스 조회 중 오류 발생: {e}")
+
+
+@app.get("/api/original")
+def api_get_original(url: str):
+    """주어진 Google News RSS/article URL에서 원문(original_url)과 추출된 이미지(image_url)를 반환합니다.
+    사용법: GET /api/original?url={GOOGLE_NEWS_URL}
+    """
+    if not url:
+        raise HTTPException(status_code=400, detail="url 쿼리 파라미터가 필요합니다.")
+    try:
+        result = get_original_article_info(url)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"원문 추출 중 오류: {e}")
 
 
 @app.post("/api/news/sample")

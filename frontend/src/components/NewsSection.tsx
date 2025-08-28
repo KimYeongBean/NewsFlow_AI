@@ -19,7 +19,7 @@ export default function NewsSection({ allNews }: NewsSectionProps) {
     : allNews.filter(news => news.category === selectedCategory);
 
   const uniquePublishers = [...new Set(categoryFilteredNews.map(news => news.source))];
-  const [selectedPublisher, setSelectedPublisher] = useState<Publisher | 'all'>('all');
+  const [selectedPublisher, setSelectedPublisher] = useState<string | 'all'>('all');
 
   useEffect(() => {
     setSelectedPublisher('all');

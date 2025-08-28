@@ -1,4 +1,5 @@
-import { Reliability, Publisher } from '@/types';
+import { Reliability } from '@/types';
+import Image from 'next/image';
 
 // 날짜 포맷 함수
 const formatDate = (dateString: string) => {
@@ -31,7 +32,7 @@ const getReliabilityClass = (reliability: Reliability) => {
 interface NewsCardProps {
   link: string;
   title: string;
-  source: Publisher;
+  source: string;
   date: string;
   summary: string;
   reliability: Reliability;
@@ -52,7 +53,11 @@ export default function NewsCard({ link, title, source, date, summary, reliabili
 
       <div className="relative w-full h-40 bg-gray-200 flex items-center justify-center">
         {imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img src={imageUrl} alt={title} className="w-full h-full object-cover" />
+          /* If you prefer next/image, replace the above <img> with:
+             <Image src={imageUrl} alt={title} fill className="object-cover" />
+             but ensure next.config.js allows external domains. */
         ) : (
           <div className="flex items-center justify-center w-full h-full">
             <span className="text-gray-400 text-sm">이미지 없음</span>
