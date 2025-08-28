@@ -58,7 +58,7 @@ export default function LanguageSelector() {
   return (
     <section className="bg-white py-4 border-b shadow-sm sticky top-0 z-10">
       <div className="flex justify-center items-center space-x-4">
-        <span className="font-semibold text-gray-700">언어 선택:</span>
+        <span className="font-semibold text-gray-700">Language:</span>
         {supportedLanguages.map(({ code, name }) => (
           <button
             key={code}
