@@ -46,15 +46,23 @@ jobs:
           if [ -f next.config.js ]; then
             cp next.config.js ../artifact/next.config.js || true
           fi
-          cd ..
-          tar -czf frontend_artifact.tar.gz artifact
+          # create zip with artifact contents at root of zip (no top-level 'artifact' folder)
+          if [ -d artifact ]; then
+            cd artifact
+            zip -r ../frontend_artifact.zip .
+            cd ..
+          else
+            echo "artifact directory missing"
+          fi
+          echo "Zip contents:" 
+          unzip -l frontend_artifact.zip || true
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
           path: |
-            frontend_artifact.tar.gz
+            frontend_artifact.zip
 
   deploy:
     runs-on: ubuntu-latest
@@ -83,5 +91,5 @@ jobs:
         with:
           app-name: 'news-front-test'
           slot-name: 'Production'
-          package: ./frontend_artifact.tar.gz
+          package: ./frontend_artifact.zip
           
