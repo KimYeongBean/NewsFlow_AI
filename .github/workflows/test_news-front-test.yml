@@ -39,13 +39,7 @@ jobs:
         with:
           name: node-app
           # Next.js 앱 실행에 필요한 파일/폴더만 선택하여 업로드
-          path: |
-            frontend/src                # <-- 이 줄을 추가하세요!
-            frontend/.next
-            frontend/public
-            frontend/package.json
-            frontend/package-lock.json
-            frontend/next.config.ts
+          path: ./frontend 
             
   deploy:
     runs-on: ubuntu-latest
