@@ -62,16 +62,21 @@ export const CATEGORIES: { readonly [key in NewsCategory]: readonly NewsSubCateg
  * HTML의 다국어 제목 구조를 반영하여 수정합니다.
  */
 export type NewsArticle = {
-  category: NewsCategory;
-  subCategory: NewsSubCategory;
-  
-  // ▼▼▼ [수정] 단일 제목(title) 대신 다국어 제목 객체(translatedTitles)를 사용합니다. ▼▼▼
+  // 백엔드에서 임의의 카테고리명을 보낼 수 있으므로 string으로 수용합니다.
+  category: string;
+  subCategory: string;
+
+  // DB의 고유 id가 있으면 표시
+  id?: string;
+
+  // 다국어 제목/요약 구조
   translatedTitles: Record<LanguageCode, string>;
+  translatedSummaries?: Record<LanguageCode, string>;
   imageUrl?: string;
-  // ▲▲▲ [수정] ▲▲▲
 
   link: string;
-  source: Publisher;
+  // 언론사명은 자유 텍스트로 올 수 있으므로 string으로 수용
+  source: string;
   date: string;
   summary: string;
   reliability: Reliability;
