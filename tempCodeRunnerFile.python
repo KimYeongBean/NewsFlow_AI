@@ -1,0 +1,118 @@
+import re, base64, urllib.parse, requests
+from bs4 import BeautifulSoup
+
+UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+URL_RE = re.compile(rb"https?://[^\s\'\"<>]+")  # 바이트에서 첫 URL 뽑기
+
+class ExtractError(Exception):
+    pass
+
+def _try_query_param(url: str):
+    parsed = urllib.parse.urlparse(url)
+    qs = urllib.parse.parse_qs(parsed.query)
+    val = (qs.get("url") or qs.get("url=", []))  # 일부 이상한 케이스 방어
+    return val[0] if val else None
+
+def _urlsafe_b64decode_loose(token: str) -> bytes:
+    # 패딩/알파벳 섞임 방어
+    t = token.replace(" ", "+").replace("-", "-").replace("_", "_")
+    t += "=" * (-len(t) % 4)
+    try:
+        return base64.urlsafe_b64decode(t)
+    except Exception:
+        # urlsafe가 아니면 일반 b64도 시도
+        t = token + "=" * (-len(token) % 4)
+        return base64.b64decode(t)
+
+def _try_articles_token(url: str):
+    parsed = urllib.parse.urlparse(url)
+    if "/articles/" not in parsed.path:
+        return None
+    # /articles/<token>(/ or ? 이전까지만)
+    token = parsed.path.split("/articles/")[1].split("/")[0].split("?")[0]
+    if not token:
+        return None
+    try:
+        blob = _urlsafe_b64decode_loose(token)
+        m = URL_RE.search(blob)
+        if m:
+            return m.group(0).decode("utf-8")
+        # 토큰 안이 JSON 문자열인 변형 대비
+        try:
+            s = blob.decode("utf-8", errors="ignore")
+            m2 = re.search(r"https?://[^\s\'\"<>]+", s)
+            if m2:
+                return m2.group(0)
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return None
+
+def _try_follow_redirect(url: str, timeout: int = 10):
+    with requests.Session() as s:
+        s.headers.update({"User-Agent": UA})
+        # HEAD가 막히는 케이스가 있어 GET으로
+        r = s.get(url, allow_redirects=True, timeout=timeout)
+        # news.google.com 중간 허브에서 <meta refresh> 유형 처리
+        if "news.google." in urllib.parse.urlparse(r.url).netloc:
+            # HTML 안에서 원문 링크/리프레시/캐노니컬 탐색
+            soup = BeautifulSoup(r.text, "html.parser")
+            # 1) meta refresh
+            m = soup.find("meta", attrs={"http-equiv": lambda v: v and v.lower()=="refresh"})
+            if m and m.get("content"):
+                mt = m["content"]
+                # content="0;url=..." 형태
+                part = re.search(r"url=(.+)$", mt, re.I)
+                if part:
+                    return urllib.parse.unquote(part.group(1))
+            # 2) 기사로 가는 a[href] 후보 (퍼블리셔 도메인을 가리키는 외부 링크)
+            for a in soup.find_all("a", href=True):
+                if "news.google." not in a["href"] and a["href"].startswith(("http://","https://")):
+                    return a["href"]
+            # 3) canonical
+            can = soup.find("link", rel=lambda v: v and v.lower()=="canonical")
+            if can and can.get("href"):
+                href = can["href"]
+                if "news.google." not in urllib.parse.urlparse(href).netloc:
+                    return href
+        # 일반적인 경우: 최종 URL이 퍼블리셔
+        return r.url
+
+def google_news_to_publisher(url: str, timeout: int = 10) -> str:
+    """
+    news.google.com 링크를 퍼블리셔(원문) URL로 변환
+    우선순위: ?url=  →  /articles/ 토큰  →  리다이렉트 따라가기(+meta/캐노니컬 파싱)
+    """
+    # 1) 쿼리 파라미터
+    val = _try_query_param(url)
+    if val:
+        return val
+
+    # 2) /articles/ 토큰(Base64) 파싱
+    val = _try_articles_token(url)
+    if val:
+        return val
+
+    # 3) 리다이렉트/HTML 파싱
+    val = _try_follow_redirect(url, timeout=timeout)
+    if val:
+        return val
+
+    raise ExtractError("원문 URL 추출 실패")
+
+# ------------------ 사용 예 ------------------
+if __name__ == "__main__":
+    tests = [
+        # 1) /articles/ 형식 (여기에 실제 링크를 넣어 테스트)
+        "https://news.google.com/rss/articles/CBMiVkFVX3lxTE5zZElhRC03S3pNTjJOQ1NBeGhkU3dkb3RRd0VqWlFidWZQRy1JWjRKLVl0S2FXc19mSGQ2cFRpb2syWHFVS1JQaVJlTnB0WEk2a2ZrMFJB0gFXQVVfeXFMTmU3aXo1SEVlNUs3UHJqWVhSSlA1ZFN6dnZ4WE5qa3dyUld4OEk2OWw0T0tkdG1HWTZQMXR4dXptS3FxY18yV3NEdUFRVXNEWjBQd09XZUV3?oc=5",
+        # 2) ?url= 파라미터가 들어있는 RSS/공유 링크
+        "https://news.google.com/rss/articles/CBMi…?url=https%3A%2F%2Fexample.com%2Fpost&hl=ko&gl=KR&ceid=KR%3Ako",
+        # 3) __i/rss/rd/articles/ 변형
+        "https://news.google.com/__i/rss/rd/articles/CBMi…?hl=ko&gl=KR&ceid=KR%3Ako",
+    ]
+    for u in tests:
+        try:
+            print(u, "→", google_news_to_publisher(u))
+        except Exception as e:
+            print(u, "→ ERROR:", e)

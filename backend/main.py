@@ -275,6 +275,67 @@ def get_original_article_info(google_news_url):
         return {'original_url': google_news_url, 'image_url': None}
 
 
+def extract_original_from_entry(entry):
+    """Try various RSS entry fields to extract the original article URL.
+    Returns a URL string or None.
+    """
+    try:
+        # 1) entry.id or guid
+        eid = getattr(entry, 'id', None) or getattr(entry, 'guid', None)
+        if eid and isinstance(eid, str):
+            m = re.search(r"https?://[^\s\"']+", eid)
+            if m:
+                url = m.group(0)
+                if 'news.google.com' not in url:
+                    print(f"  -> [RSS:id] extracted: {url}")
+                    return url
+
+        # 2) links array (common case)
+        links = getattr(entry, 'links', None)
+        if links:
+            for l in links:
+                href = l.get('href') or l.get('link')
+                rel = l.get('rel', '')
+                ltype = l.get('type', '')
+                if href and href.startswith('http') and 'news.google.com' not in href:
+                    # prefer alternate/text/html
+                    if 'alternate' in rel or 'html' in ltype or True:
+                        print(f"  -> [RSS:links] candidate: {href}")
+                        return href
+
+        # 3) summary HTML anchor
+        summary = getattr(entry, 'summary', None) or getattr(entry, 'summary_detail', None)
+        if summary:
+            val = summary if isinstance(summary, str) else (getattr(summary, 'value', '') or '')
+            soup = BeautifulSoup(val, 'html.parser')
+            a = soup.find('a', href=True)
+            if a:
+                href = a['href']
+                if href.startswith('/'):
+                    href = urljoin(getattr(entry, 'link', ''), href)
+                if href and href.startswith('http') and 'news.google.com' not in href:
+                    print(f"  -> [RSS:summary] anchor: {href}")
+                    return href
+
+        # 4) entry.link query params (e.g., /url?q=)
+        link = getattr(entry, 'link', None)
+        if link and isinstance(link, str):
+            parsed = urlparse(link)
+            qs = parse_qs(parsed.query)
+            for key in ('q', 'url'):
+                if key in qs and qs[key]:
+                    cand = qs[key][0]
+                    if cand.startswith('http') and 'news.google.com' not in cand:
+                        print(f"  -> [RSS:link-q] found: {cand}")
+                        return cand
+
+        # 5) media:content / media_thumbnail fields sometimes contain original image URL only
+        # not used here as original link, skip
+    except Exception as e:
+        print(f"  [WARN] extract_original_from_entry error: {e}")
+    return None
+
+
 def call_external_og_api(url):
     """폴백: 외부 OG 미리보기 API 호출. API키가 없으면 None 반환."""
     try:
@@ -561,28 +622,16 @@ async def process_and_save_news(main_category: str, sub_category: str):
                         print("[DEBUG] Skipping: older than 30 days")
                     continue
 
-                # Resolve original URL from entry or via helper
-                original = None
-                links = getattr(entry, 'links', None)
-                if links:
-                    for l in links:
-                        href = l.get('href') or l.get('link')
-                        if href and href.startswith('http') and 'news.google.com' not in href:
-                            original = href
-                            break
-                if not original and getattr(entry, 'summary', None):
-                    soup_summary = BeautifulSoup(entry.summary, 'html.parser')
-                    a_tag = soup_summary.find('a', href=True)
-                    if a_tag and a_tag['href']:
-                        href = a_tag['href']
-                        if href.startswith('/'):
-                            href = urljoin(getattr(entry, 'link', ''), href)
-                        original = href
-
-                if not original:
-                    article_info = get_original_article_info(getattr(entry, 'link', ''))
-                else:
+                # Try extracting original URL from RSS entry first
+                original = extract_original_from_entry(entry)
+                if original:
                     article_info = {'original_url': original, 'image_url': None}
+                    if debug:
+                        print(f"[DEBUG] original extracted from entry: {original}")
+                else:
+                    article_info = get_original_article_info(getattr(entry, 'link', ''))
+                    if debug:
+                        print(f"[DEBUG] resolved original via requests: {article_info.get('original_url')}")
 
                 # Hybrid image extraction
                 if not article_info.get('image_url'):
@@ -875,15 +924,13 @@ async def process_and_save_news_v2(main_category: str, sub_category: str):
 # ================================
 async def fetch_all_categories_in_background():
     print("🚀 서버 시작 - 백그라운드 뉴스 수집을 시작합니다.")
-    # 테스트용: 로컬에서 빠르게 확인하려면 아래처럼 '정치'의 '대통령실'만 수집하도록 제한하세요.
-    # 실제 운영 시 아래 블록을 주석 처리하고 기존 반복문을 사용하세요.
-    if '정치' in categories:
-        await process_and_save_news_v2('정치', '대통령실')
-    else:
-        for main_category, sub_categories in categories.items():
-            if main_category in user_follow_categories:
-                for sub_category in sub_categories:
-                    await process_and_save_news_v2(main_category, sub_category)
+
+
+    # 모든 카테고리와 소분류를 순회하여 처리합니다.
+    # 로컬 테스트 목적의 제한은 제거되었습니다.
+    for main_category, sub_categories in categories.items():
+        for sub_category in sub_categories:
+            await process_and_save_news_v2(main_category, sub_category)
     print("✅ 모든 카테고리의 뉴스 수집 및 처리가 완료되었습니다.")
 
 @app.on_event("startup")
