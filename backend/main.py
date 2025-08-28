@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 from urllib.parse import quote
 from openai import AzureOpenAI
 import re
+import uuid
+from azure.cosmos import CosmosClient, PartitionKey
 
 # ================================
 # 1. 전체 뉴스/카테고리 목록
@@ -37,11 +39,48 @@ endpoint = "https://newscheck2.openai.azure.com/"
 deployment = "gpt-5-nano"
 api_key = "Dsf5DmuTn1cS7lXaSxSTnO30kTZCqr2xKqIjLwvdovEGnQsz3NjlJQQJ99BHACHYHv6XJ3w3AAABACOGJk53"
 
+MAX_ARTICLES_PER_CATEGORY = 100
+
+one_month_ago = datetime.now() - timedelta(days=30)
+
+# ================================
+# 2. Azure 서비스 초기화
+# ================================
+# --- Azure OpenAI 초기화 ---
+openai_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "https://newscheck2.openai.azure.com/")
+openai_deployment = "gpt-5-nano"
+openai_api_key = os.getenv("AZURE_OPENAI_API_KEY")
+
 client = AzureOpenAI(
-    azure_endpoint=endpoint,
-    api_key=api_key,
+    azure_endpoint=openai_endpoint,
+    api_key=openai_api_key,
     api_version="2025-01-01-preview",
 )
+
+# --- Azure Cosmos DB 초기화 ---
+cosmos_endpoint = os.getenv("COSMOS_DB_ENDPOINT")
+cosmos_key = os.getenv("COSMOS_DB_KEY")
+cosmos_database_name = os.getenv("COSMOS_DB_DATABASE_NAME", "news-db")
+cosmos_container_name = os.getenv("COSMOS_DB_CONTAINER_NAME", "articles")
+
+# Cosmos DB 클라이언트, 데이터베이스, 컨테이너 초기화
+cosmos_client = None
+database_client = None
+container_client = None
+
+if cosmos_endpoint and cosmos_key:
+    try:
+        cosmos_client = CosmosClient(cosmos_endpoint, credential=cosmos_key)
+        database_client = cosmos_client.create_database_if_not_exists(id=cosmos_database_name)
+        container_client = database_client.create_container_if_not_exists(
+            id=cosmos_container_name,
+            partition_key=PartitionKey(path="/category") # 카테고리별로 데이터를 분할
+        )
+        print("✅ Azure Cosmos DB가 성공적으로 초기화되었습니다.")
+    except Exception as e:
+        print(f"🚨 Azure Cosmos DB 초기화 중 오류 발생: {e}")
+else:
+    print("🚨 Cosmos DB 환경 변수(COSMOS_DB_ENDPOINT, COSMOS_DB_KEY)가 설정되지 않았습니다.")
 
 # ================================
 # 3. 사용자 설정 함수
