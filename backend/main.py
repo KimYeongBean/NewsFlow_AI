@@ -9,6 +9,11 @@ from urllib.parse import quote
 from openai import AzureOpenAI
 import re
 import requests
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import TimeoutException
 import uuid
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException
@@ -115,20 +120,35 @@ class NewsArticle(BaseModel):
 # ================================
 def get_original_article_info(google_news_url):
     print(f"  -> [변환 시도] 기존 주소: {google_news_url}")
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+    service = Service()
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    original_url, image_url = google_news_url, None
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        response = requests.get(google_news_url, headers=headers, allow_redirects=True, timeout=15)
-        response.raise_for_status()
-        original_url = response.url
+        driver.get(google_news_url)
+        WebDriverWait(driver, 15).until(lambda d: "news.google.com" not in d.current_url)
+        original_url = driver.current_url
         print(f"  -> [변환 완료] 원문 주소: {original_url}")
-        soup = BeautifulSoup(response.text, 'html.parser')
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
         image_tag = soup.find('meta', property='og:image')
-        image_url = image_tag['content'] if image_tag and image_tag.get('content') else None
-        if image_url: print("  -> 이미지 주소 찾음!")
-        return {'original_url': original_url, 'image_url': image_url}
+        if image_tag and image_tag.get('content'):
+            image_url = image_tag['content']
+            print("  -> 이미지 주소 찾음!")
+        else:
+            print("  [알림] 이 페이지에는 og:image 태그가 없습니다.")
+    except TimeoutException:
+        print(f"  [오류] 원문 주소 변환 중 타임아웃 발생. 최종 URL: {driver.current_url}")
+        original_url = driver.current_url # 타임아웃 시점의 URL이라도 반환
     except Exception as e:
-        print(f"  [오류] 원문 주소 변환 중 오류: {e}")
-        return {'original_url': google_news_url, 'image_url': None}
+        print(f"  [오류] 작업 중 오류 발생: {e}")
+        original_url = driver.current_url
+        print(f"  -> [오류 시점 주소] {original_url}")
+    finally:
+        driver.quit()
+    return {'original_url': original_url, 'image_url': image_url}
 
 def scrape_article_body(url):
     try:

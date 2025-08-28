@@ -20,3 +20,6 @@ azure-cosmos
 
 # .env 파일 로드
 python-dotenv
+
+# 브라우저 자동화 (JavaScript 리디렉션 처리용)
+selenium

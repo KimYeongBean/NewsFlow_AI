@@ -11,54 +11,15 @@ on:
 
 permissions:
   id-token: write   # OIDC 토큰 발급
-  contents: read  
+  contents: read
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read #This is required for actions/checkout
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node.js version
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20.x'
-
-      - name: Install dependencies and build
-        # frontend 폴더로 이동해서 명령어 실행
-        working-directory: ./frontend
-        run: |
-          npm install
-          npm run build
-
-      - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v4
-        with:
-          name: node-app
-          # Next.js 앱 실행에 필요한 파일/폴더만 선택하여 업로드
-          path: |
-            frontend/.next
-            frontend/public
-            frontend/package.json
-            frontend/package-lock.json
-            frontend/next.config.ts
-            
   deploy:
     runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
-
     steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v4
-        with:
-          name: node-app
-      
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -66,20 +27,11 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: 'Deploy to Azure Web App'
-        id: deploy-to-webapp
+      - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: 'news-front'
           slot-name: 'Production'
-          package: . # 이 부분은 수정할 필요 없습니다. 위에서 전달받은 파일 전체를 의미합니다.
-
-
-
-
-
-
-
-
-
-
+          package: './frontend'
+          # Azure App Service의 빌드 엔진(Oryx)이 package.json을 보고
+          # 자동으로 npm install과 npm run build를 실행하도록 설정합니다.
