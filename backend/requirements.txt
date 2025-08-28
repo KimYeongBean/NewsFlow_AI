@@ -8,6 +8,9 @@ pydantic
 # Google 뉴스 RSS 피드 파싱
 feedparser
 
+# 웹 스크래핑
+beautifulsoup4
+
 # Azure OpenAI SDK
 openai
 
