@@ -1,3 +1,6 @@
+# ================================
+# 0. 라이브러리 임포트
+# ================================
 import feedparser
 import time
 import os
@@ -5,282 +8,250 @@ from datetime import datetime, timedelta
 from urllib.parse import quote
 from openai import AzureOpenAI
 import re
+import requests
+import uuid
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
 
 # ================================
-# 1. 전체 뉴스/카테고리 목록
+# 1. 사용자 설정
+# ================================
+user_selected_sources = ["조선일보", "한겨레", "중앙일보", "동아일보", "경향신문"]
+user_follow_categories = ["여행"]
+
+# ================================
+# 2. Azure AI 서비스 설정
+# ================================
+# --- Azure AI 번역기(Translator) 설정 ---
+translator_key = "5NuWjUHv52i3letxBdeZw1V46HADYfjoUdUc8aJqBm38uBSl16u4JQQJ99BHACNns7RXJ3w3AAAbACOG8bu6"
+translator_endpoint = "https://api.cognitive.microsofttranslator.com/"
+translator_location = "KoreaCentral"
+
+# ================================
+# 3. Azure OpenAI 초기화
+# ================================
+endpoint = "https://newscheck2.openai.azure.com/"
+deployment = "gpt-4o"
+subscription_key = "Dsf5DmuTn1cS7lXaSxSTnO30kTZCqr2xKqIjLwvdovEGnQsz3NjlJQQJ99BHACHYHv6XJ3w3AAABACOGJk53"
+api_version = "2025-01-01-preview"
+
+client = AzureOpenAI(
+    azure_endpoint=endpoint,
+    api_key=subscription_key,
+    api_version=api_version,
+)
+
+# ================================
+# 4. 전체 뉴스/카테고리
 # ================================
 all_sources = [
     'MBC뉴스', '연합뉴스', '조선일보', '뉴스1', 'JTBC 뉴스',
     '중앙일보', 'SBS 뉴스', 'YTN', '한겨레', '경향신문',
-    '오마이뉴스', '한국경제', '매일경제', '프레시안', '머니투데이'
+    '오마이뉴스', '한국경제'
 ]
-
 categories = {
     '정치': ['대통령실', '국회', '정당', '행정', '외교', '국방/북한'],
     '경제': ['금융/증권', '산업/재계', '중기/벤처', '부동산', '글로벌', '생활'],
     '사회': ['사건사고', '교육', '노동', '언론', '환경', '인권/복지', '식품/의료', '지역', '인물'],
     'IT_과학': ['모바일', '인터넷/SNS', '통신/뉴미디어', 'IT', '보안/해킹', '컴퓨터', '게임/리뷰', '과학'],
     '생활_문화': ['건강', '자동차', '여행/레저', '음식/맛집', '패션/뷰티', '공연/전시', '책', '종교', '날씨', '생활'],
-    '세계': ['아시아/호주', '미국/중남미', '유럽', '중동/아프리카', '세계']
+    '세계': ['아시아/호주', '미국/중남미', '유럽', '중동/아프리카', '세계'],
+    '여행': ['국내 여행']
 }
-
 MAX_ARTICLES_PER_CATEGORY = 100
-save_path = './output'
-
+save_path = 'C:/Users/admin/Desktop/news/test1/output'
 one_month_ago = datetime.now() - timedelta(days=30)
 os.makedirs(save_path, exist_ok=True)
 
 # ================================
-# 2. Azure OpenAI 초기화
+# 5. 원문/이미지 주소 추출 함수 (WebDriverWait 적용)
 # ================================
-endpoint = "https://newscheck2.openai.azure.com/"
-deployment = "gpt-5-nano"
-api_key = "Dsf5DmuTn1cS7lXaSxSTnO30kTZCqr2xKqIjLwvdovEGnQsz3NjlJQQJ99BHACHYHv6XJ3w3AAABACOGJk53"
-
-client = AzureOpenAI(
-    azure_endpoint=endpoint,
-    api_key=api_key,
-    api_version="2025-01-01-preview",
-)
-
-# ================================
-# 3. 사용자 설정 함수
-# ================================
-def get_user_preferences():
-    """사용자로부터 언론사(5개)와 뉴스 카테고리(무제한)를 입력받는 함수"""
-    print("📰 분석을 원하는 언론사 5개를 선택해주세요. (쉼표(,)로 구분)")
-    for i, source in enumerate(all_sources):
-        print(f"{i+1}. {source}", end='  ')
-    print("\n")
-    
-    selected_sources = []
-    while len(selected_sources) != 5:
-        try:
-            user_input = input(">> 선택 (번호 또는 이름 5개 입력): ")
-            inputs = [item.strip() for item in user_input.split(',')]
-            
-            if len(inputs) != 5:
-                print("🚨 반드시 5개의 언론사를 선택해야 합니다. 다시 입력해주세요.")
-                continue
-
-            temp_sources = []
-            valid_input = True
-            for item in inputs:
-                if item.isdigit() and 1 <= int(item) <= len(all_sources):
-                    temp_sources.append(all_sources[int(item) - 1])
-                elif item in all_sources:
-                    temp_sources.append(item)
-                else:
-                    print(f"🚨 '{item}'은(는) 잘못된 입력입니다. 목록에 있는 번호나 이름을 입력해주세요.")
-                    valid_input = False
-                    break
-            
-            if valid_input:
-                unique_sources = sorted(list(set(temp_sources)))
-                if len(unique_sources) == 5:
-                    selected_sources = unique_sources
-                else:
-                    print("🚨 중복된 선택이 있거나, 5개가 아닙니다. 다시 선택해주세요.")
-        except ValueError:
-            print("🚨 잘못된 입력입니다. 다시 시도해주세요.")
-    
-    print(f"\n✅ 선택된 언론사: {', '.join(selected_sources)}\n")
-
-    print("📚 수집을 원하는 뉴스 카테고리를 선택해주세요. (갯수 제한 없음, 여러 개 선택 시 쉼표(,)로 구분)")
-    category_keys = list(categories.keys())
-    for i, cat in enumerate(category_keys):
-        print(f"{i+1}. {cat}", end='  ')
-    print("\n")
-
-    selected_categories = []
-    while not selected_categories:
-        try:
-            user_input = input(">> 선택 (번호 또는 이름 입력): ")
-            inputs = [item.strip() for item in user_input.split(',')]
-            for item in inputs:
-                if item.isdigit() and 1 <= int(item) <= len(category_keys):
-                    selected_categories.append(category_keys[int(item) - 1])
-                elif item in category_keys:
-                    selected_categories.append(item)
-            if not selected_categories:
-                print("🚨 잘못된 입력입니다. 목록에 있는 번호나 이름을 입력해주세요.")
-        except ValueError:
-            print("🚨 잘못된 입력입니다. 다시 시도해주세요.")
-
-    selected_categories = sorted(list(set(selected_categories)))
-    print(f"\n✅ 선택된 카테고리: {', '.join(selected_categories)}\n")
-    
-    return selected_sources, selected_categories
+def get_original_article_info(google_news_url):
+    print(f"  -> [변환 시도] 기존 주소: {google_news_url}")
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+    service = Service()
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    original_url, image_url = google_news_url, None
+    try:
+        driver.get(google_news_url)
+        WebDriverWait(driver, 15).until(lambda d: "news.google.com" not in d.current_url)
+        original_url = driver.current_url
+        print(f"  -> [변환 완료] 원문 주소: {original_url}")
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        image_tag = soup.find('meta', property='og:image')
+        if image_tag and image_tag.get('content'):
+            image_url = image_tag['content']
+            print("  -> 이미지 주소 찾음!")
+        else:
+            print("  [알림] 이 페이지에는 og:image 태그가 없습니다.")
+    except Exception as e:
+        print(f"  [오류] 작업 중 오류 발생 (타임아웃 또는 기타): {e}")
+        original_url = driver.current_url
+        print(f"  -> [오류 시점 주소] {original_url}")
+    finally:
+        driver.quit()
+    return {'original_url': original_url, 'image_url': image_url}
 
 # ================================
-# 4. 뉴스 수집 함수
+# 5-1. 기사 본문 수집 함수
 # ================================
-def fetch_news(sub_category, main_category):
+def scrape_article_body(url):
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+        article_tag = soup.find('article')
+        if not article_tag:
+            selectors = ['#articleBodyContents', '#article_body', '.article_body', '#dic_area']
+            for selector in selectors:
+                article_tag = soup.select_one(selector)
+                if article_tag: break
+        if article_tag:
+            paragraphs = article_tag.find_all('p')
+            if not paragraphs: paragraphs = article_tag.find_all('div')
+            body_text = "\n".join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)])
+            if len(body_text) > 50:
+                print("  -> 본문 수집 성공!")
+                return body_text
+        print("  [알림] 기사 본문을 찾을 수 없거나 내용이 너무 짧습니다.")
+        return None
+    except Exception as e:
+        print(f"  [오류] 본문 수집 중 오류 발생: {e}")
+        return None
+
+# ================================
+# 6. 뉴스 수집 및 GPT 평가 함수
+# ================================
+def fetch_news(sub_category):
     encoded_keyword = quote(sub_category)
-    news_url = f"https://news.google.com/rss/search?q={encoded_keyword}&hl=ko&gl=KR&ceid=KR:ko"
+    news_url = f"https://news.google.com/rss/search?q={encoded_keyword}&hl=ko&gl=KR"
     feed = feedparser.parse(news_url)
-
     articles = []
-    saved_count = 0
-
     for entry in feed.entries:
-        if saved_count >= MAX_ARTICLES_PER_CATEGORY:
-            break
-
-        source_name = getattr(entry, 'source', None)
-        if source_name and source_name.title in all_sources:
+        if len(articles) >= MAX_ARTICLES_PER_CATEGORY: break
+        source = getattr(entry, 'source', None)
+        if source and source.title in all_sources:
             published_time = entry.get('published_parsed')
-            if not published_time:
-                continue
-            
+            if not published_time: continue
             article_date = datetime.fromtimestamp(time.mktime(published_time))
-            if article_date < one_month_ago:
-                continue
-
-            content = re.sub('<[^<]+?>', '', entry.summary if hasattr(entry, 'summary') else entry.title)
-
+            if article_date < one_month_ago: continue
+            print(f"Processing '{entry.title[:30]}...'")
+            article_info = get_original_article_info(entry.link)
+            body_text = None
+            if "news.google.com" not in article_info['original_url']:
+                body_text = scrape_article_body(article_info['original_url'])
             articles.append({
                 'title': entry.title,
-                'link': entry.link,
-                'source': source_name.title,
+                'link': article_info['original_url'],
+                'image_url': article_info['image_url'],
+                'source': source.title,
                 'date': article_date.strftime('%Y-%m-%d %H:%M:%S'),
-                'content': content
+                'content': body_text if body_text else entry.title
             })
-            saved_count += 1
     return articles
 
-# ================================
-# 5. GPT 평가 함수 (수정됨)
-# ================================
-def gpt_evaluate(article, selected_sources):
-    """GPT를 사용하여 기사를 요약하고 신뢰도를 평가하는 함수 (프롬프트 개선)"""
-    # 프롬프트를 더 명확하고 구조적으로 변경하여 모델이 지시를 더 잘 따르도록 함
-    prompt_text = f"""
-당신은 뉴스 기사를 객관적으로 분석하는 AI입니다. 아래 요청사항에 따라 기사를 분석하고, 반드시 지정된 형식으로만 출력해주세요.
-
-[분석할 뉴스 기사]
-- 제목: {article['title']}
-- 내용: {article['content']}
-
-[요청 사항]
-1. [요약]: 기사의 핵심 내용을 3줄로 요약해주세요.
-2. [신뢰도]: 기사의 신뢰도를 '높음', '보통', '낮음' 중 하나로 평가하고, 그 이유를 한 문장으로 설명해주세요. (형식: [평가 등급] - [평가 이유])
-
-[신뢰도 평가 기준]
-- 높음: 사실 관계가 명확하고, 여러 출처에서 교차 확인이 가능하며, 객관적인 논조를 유지하는 경우.
-- 보통: 사실에 기반하지만 특정 관점이 두드러지거나, 일부 주장에 대한 근거가 부족한 경우.
-- 낮음: 감정적이거나 자극적인 표현을 사용하고, 확인되지 않은 사실을 전달하거나, 명백한 편향성을 보이는 경우.
-"""
-    messages = [
-        {"role": "system", "content": "당신은 뉴스 기사를 [요약]과 [신뢰도] 두 항목으로 나누어 분석하고, 지정된 형식에 맞춰 결과를 출력하는 AI입니다."},
-        {"role": "user", "content": prompt_text}
-    ]
-
+def gpt_evaluate(article_text, selected_sources):
+    prompt_text = f"당신은 뉴스 요약 도우미입니다.\n사용자가 선택한 언론사: {', '.join(selected_sources)}\n\n아래 뉴스 제목 또는 본문을 기반으로:\n1) 3줄로 요약\n2) 선택한 언론사와 핵심 주장 비교\n3) 신뢰도 등급 출력 (반드시 아래 형식만 사용):\n    신뢰도: 높음 / 보통 / 낮음\n\n신뢰도 평가 기준:\n- 주요 언론사(조선일보, 한겨레, 중앙일보, 동아일보, 경향신문) → 높음\n- 제목만 존재하거나 일부 정보만 있는 경우 → 보통\n- 근거 부족/선정적/출처 불분명 → 낮음\n\n⚠️ 출력 형식을 반드시 지켜주세요. 다른 말은 절대 추가하지 마세요."
+    messages = [{"role": "system", "content": "너는 뉴스 요약과 언론사 비교, 신뢰도 평가만 간단히 출력하는 도우미야."}, {"role": "user", "content": prompt_text}, {"role": "user", "content": article_text}]
     try:
-        completion = client.chat.completions.create(
-            model=deployment,
-            messages=messages,
-            max_tokens=1500,
-            temperature=0.3, # 더 사실에 기반한 답변을 위해 온도를 낮춤
-        )
-        result_text = completion.choices[0].message.content.strip()
-        return result_text
+        completion = client.chat.completions.create(model=deployment, messages=messages, max_completion_tokens=1024)
+        return completion.choices[0].message.content.strip()
     except Exception as e:
         return f"GPT 평가 오류: {e}"
 
 # ================================
-# 6. HTML 저장 함수 (수정됨)
+# 7. Azure 번역 함수
 # ================================
-def save_news_to_html(main_category, sub_category, articles):
-    """수집하고 평가한 뉴스 기사를 HTML 파일로 저장하는 함수"""
+def translate_with_azure(text_to_translate, target_languages):
+    headers = {'Ocp-Apim-Subscription-Key': translator_key, 'Ocp-Apim-Subscription-Region': translator_location, 'Content-type': 'application/json', 'X-ClientTraceId': str(uuid.uuid4())}
+    params = {'api-version': '3.0', 'from': 'ko', 'to': target_languages}
+    body = [{'text': text_to_translate}]
+    try:
+        response = requests.post(f"{translator_endpoint}/translate", params=params, headers=headers, json=body)
+        response.raise_for_status()
+        translations = response.json()
+        return {t['to']: t['text'] for t in translations[0]['translations']}
+    except Exception as e:
+        print(f"Azure 번역 API 오류: {e}")
+        return {lang: "번역 오류" for lang in target_languages}
+
+# ================================
+# 8. HTML 저장 함수
+# ================================
+def save_news_with_translations(main_category, sub_category, articles):
     main_path = os.path.join(save_path, main_category)
     os.makedirs(main_path, exist_ok=True)
-    
-    safe_sub_category = sub_category.replace('/', '_').replace('\\', '_')
-    file_name = f"{safe_sub_category}_news.html"
+    file_name = f"{sub_category.replace('/', '_')}_news.html"
     full_path = os.path.join(main_path, file_name)
-
     with open(full_path, 'w', encoding='utf-8') as f:
-        f.write("<!DOCTYPE html><html lang='ko'><head><meta charset='utf-8'>")
-        f.write(f"<title>{main_category} - {sub_category} 뉴스</title>")
-        f.write("<style>")
-        f.write("""
-            body { font-family: 'Malgun Gothic', sans-serif; line-height: 1.6; margin: 20px; background-color: #f4f4f9; color: #333; }
-            h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
-            .article { background-color: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-            .article h3 a { color: #3498db; text-decoration: none; }
-            .article h3 a:hover { text-decoration: underline; }
-            .meta { font-size: 0.9em; color: #7f8c8d; margin-bottom: 15px; }
-            .evaluation { background-color: #ecf0f1; border-left: 4px solid #3498db; padding: 15px; margin-top: 15px; border-radius: 4px; }
-            .reliability { font-weight: bold; padding: 3px 8px; border-radius: 12px; color: white; font-size: 0.9em; }
-            .high { background-color: #2ecc71; }
-            .medium { background-color: #f39c12; }
-            .low { background-color: #e74c3c; }
-        """)
-        f.write("</style></head><body>\n")
-        f.write(f"<h1>{main_category} - {sub_category}</h1>\n")
-
-        if not articles:
-            f.write("<p>해당 카테고리에서 수집된 뉴스가 없습니다.</p>")
-
-        for article in articles:
-            evaluation_text = article.get('evaluation', '')
-            
-            # 더 안정적인 파싱을 위해 정규 표현식 수정
-            summary_match = re.search(r'\[요약\](.*?)(?=\[신뢰도\]|\Z)', evaluation_text, re.DOTALL)
-            reliability_match = re.search(r'\[신뢰도\]\s*(높음|보통|낮음)\s*-\s*(.*)', evaluation_text, re.DOTALL)
-
-            summary = summary_match.group(1).strip().replace('\n', '<br>') if summary_match else "요약 정보를 가져오는 데 실패했습니다."
-            
-            reliability_grade = "평가 실패"
-            reliability_reason = ""
-            reliability_class = ""
-
-            if reliability_match:
-                reliability_grade = reliability_match.group(1).strip()
-                reliability_reason = reliability_match.group(2).strip()
-                if reliability_grade == "높음": reliability_class = "high"
-                elif reliability_grade == "보통": reliability_class = "medium"
-                elif reliability_grade == "낮음": reliability_class = "low"
+        f.write("<html><head><meta charset='utf-8'><title>뉴스 요약</title><style>body{font-family:'Malgun Gothic',sans-serif;margin:20px;line-height:1.6}.article-block{border-bottom:1px solid #ddd;padding-bottom:15px;margin-bottom:15px}.lang-buttons{margin-bottom:10px}.lang-buttons button{padding:8px 12px;cursor:pointer;border:1px solid #ccc;background-color:#f0f0f0;margin-right:5px;border-radius:5px}.lang-buttons button.active{background-color:#3498db;color:white;border-color:#3498db}.content-wrapper .content{display:none}.content-wrapper .content.active{display:block}.summary{background-color:#f8f9f9;border-left:4px solid #3498db;padding:10px;margin-top:5px}.reliability{font-weight:bold;padding:3px 8px;border-radius:5px;color:white;display:inline-block;margin-left:10px}.high{background-color:#2ecc71}.medium{background-color:#f39c12}.low{background-color:#e74c3c}.article-image{max-width:100%;height:auto;border-radius:8px;margin-bottom:10px;object-fit:cover;max-height:400px}.no-image-text{color:#888;font-style:italic;margin-bottom:10px;display:block}</style></head><body>")
+        f.write(f"<h1>{main_category} - {sub_category} 뉴스</h1>")
+        f.write('<div class="lang-buttons"><strong>전체 언어 변경:</strong><button onclick="changeAllLanguages(\'ko\')" class="active">한국어</button><button onclick="changeAllLanguages(\'en\')">English</button><button onclick="changeAllLanguages(\'ja\')">日本語</button><button onclick="changeAllLanguages(\'zh-Hans\')">中文(简体)</button><button onclick="changeAllLanguages(\'fr\')">Français</button></div><hr>')
+        for i, article in enumerate(articles):
+            f.write(f'<div class="article-block" id="article-{i}">')
+            if article.get('image_url'):
+                f.write(f"<img src='{article['image_url']}' alt='기사 대표 이미지' class='article-image' onerror='this.style.display=\"none\"'>")
             else:
-                # GPT 응답 전체를 이유로 표시하여 디버깅에 용이하게 함
-                reliability_reason = f"신뢰도 정보를 파싱하는 데 실패했습니다. (원본 응답: {evaluation_text})"
-
-            f.write("<div class='article'>\n")
-            f.write(f"<h3><a href='{article['link']}' target='_blank' rel='noopener noreferrer'>{article['title']}</a></h3>\n")
-            f.write(f"<p class='meta'><b>언론사:</b> {article['source']} | <b>발행 시간:</b> {article['date']}</p>\n")
-            f.write("<div class='evaluation'>\n")
-            f.write(f"<p><b>🤖 AI 요약:</b><br>{summary}</p>\n")
-            f.write(f"<p><b>⭐ 신뢰도 평가:</b> <span class='reliability {reliability_class}'>{reliability_grade}</span> - {reliability_reason}</p>\n")
-            f.write("</div>\n</div>\n")
-
-        f.write("</body></html>")
+                f.write("<span class='no-image-text'>[이미지 없음]</span>")
+            f.write(f"<p><b>언론사:</b> {article['source']} | <b>발행 시간:</b> {article['date']}</p><div class='content-wrapper'>")
+            for lang, content in article['translations'].items():
+                active_class = "active" if lang == 'ko' else ""
+                title, summary_html = (content['title'], content['summary_html']) if lang == 'ko' else (content, article['translations']['ko']['summary_html'])
+                f.write(f'<div class="content {lang} {active_class}"><h3><a href=\'{article["link"]}\' target=\'blank\'>{title}</a></h3>')
+                if lang == 'ko' and summary_html: f.write(summary_html)
+                f.write('</div>')
+            f.write('</div></div>')
+        f.write('<script>function changeAllLanguages(lang){document.querySelectorAll(".lang-buttons button").forEach(b=>b.classList.remove("active"));document.querySelector(`.lang-buttons button[onclick="changeAllLanguages(\'${lang}\')"]`).classList.add("active");document.querySelectorAll(".article-block").forEach(article=>{article.querySelectorAll(".content").forEach(c=>c.classList.remove("active"));const target=article.querySelector(`.content.${lang}`);if(target)target.classList.add("active")})}</script></body></html>')
 
 # ================================
-# 7. 메인 실행 루프
+# 9. 메인 실행 루프
 # ================================
-if __name__ == "__main__":
-    user_selected_sources, user_follow_categories = get_user_preferences()
+target_languages = ['en', 'ja', 'fr', 'zh-Hans']
 
-    print("\n🚀 뉴스 수집 및 분석을 시작합니다...\n")
-    
-    for main_category in user_follow_categories:
-        sub_categories = categories.get(main_category, [])
-        for sub_category in sub_categories:
-            print(f"[{main_category}] '{sub_category}' 뉴스 수집 중...")
-            articles = fetch_news(sub_category, main_category)
+for main_category, sub_categories in categories.items():
+    if main_category not in user_follow_categories: continue
+    for sub_category in sub_categories:
+        print(f"[{main_category}] {sub_category} 뉴스 수집 중...")
+        articles = fetch_news(sub_category)
+        if not articles:
+            print("  -> 수집된 뉴스가 없습니다.")
+            continue
+        processed_articles = []
+        for article in articles:
+            print(f"  - '{article['title'][:30]}...' GPT 평가 및 번역 중...")
 
-            if not articles:
-                print(f"  -> 수집된 뉴스가 없습니다.")
-                continue
+            evaluation_text = gpt_evaluate(article['content'], user_selected_sources)
 
-            print(f"  -> {len(articles)}개 뉴스 수집 완료. GPT 평가 시작...")
-            for i, article in enumerate(articles):
-                print(f"    - 기사 {i+1}/{len(articles)} 평가 중...")
-                article['evaluation'] = gpt_evaluate(article, user_selected_sources)
-                time.sleep(1)
+            # [디버깅 코드 활성화] AI의 실제 응답을 터미널에 출력합니다.
+            print("---------- GPT Raw Response ----------")
+            print(evaluation_text)
+            print("------------------------------------")
 
-            save_news_to_html(main_category, sub_category, articles)
-            print(f"  -> '{sub_category}' 뉴스 저장 완료.\n")
-
-    print("\n🎉 모든 작업이 완료되었습니다! 'output' 폴더를 확인해주세요.")
+            time.sleep(1)
+            summary_match = re.search(r'1\)(.*?)(?=2\)|\Z)', evaluation_text, re.DOTALL)
+            reliability_match = re.search(r'신뢰도:\s*(높음|보통|낮음)', evaluation_text)
+            summary_text = summary_match.group(1).strip() if summary_match else "요약 정보 없음"
+            reliability = reliability_match.group(1).strip() if reliability_match else "알 수 없음"
+            azure_translations = translate_with_azure(f"{article['title']}\n{summary_text}", target_languages)
+            translated_titles = {lang: trans_text.split('\n', 1)[0] for lang, trans_text in azure_translations.items()}
+            reliability_class = {"높음": "high", "보통": "medium"}.get(reliability, "low")
+            summary_html = f"<div class='summary'>{summary_text.replace('\n', '<br>')}<span class='reliability {reliability_class}'>신뢰도: {reliability}</span></div>"
+            article_data = {
+                'link': article['link'], 'image_url': article['image_url'], 'source': article['source'], 'date': article['date'],
+                'translations': {
+                    'ko': {'title': article['title'], 'summary_html': summary_html},
+                    'en': translated_titles.get('en', "번역 오류"), 'ja': translated_titles.get('ja', "번역 오류"),
+                    'fr': translated_titles.get('fr', "번역 오류"), 'zh-Hans': translated_titles.get('zh-Hans', "번역 오류")
+                }
+            }
+            processed_articles.append(article_data)
+        save_news_with_translations(main_category, sub_category, processed_articles)
+        print(f"  -> {len(processed_articles)}개 뉴스 저장 완료.")
+print("\n🎉 모든 뉴스 수집, 평가 및 번역 완료!")
