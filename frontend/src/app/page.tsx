@@ -43,25 +43,38 @@ async function getNewsFromHtml(): Promise<NewsArticle[]> {
 
               const link = $(element).find('h3 a').attr('href') || '#';
               const imageUrl = $(element).find('.article-image').attr('src');
-              const summaryElement = $(element).find('.content.ko .summary');
-              const reliabilitySpan = summaryElement.find('.reliability').clone();
-              summaryElement.find('.reliability').remove();
-              const summary = summaryElement.text().trim() || "요약 정보 없음";
-              
-              const reliabilityMatch = reliabilitySpan.text().match(/신뢰도:\s*(.*)/);
-              const reliability = reliabilityMatch ? reliabilityMatch[1].trim() as Reliability : '알 수 없음';
-              
-              // ▼▼▼ [수정] 모든 언어의 제목을 올바르게 추출하도록 로직을 변경합니다. ▼▼▼
-              const translatedTitles = {} as Record<LanguageCode, string>;
+              // ▼▼▼ [수정] 모든 언어의 제목과 요약을 추출하도록 로직을 변경합니다. ▼▼▼
+              const translatedTitles: Record<LanguageCode, string> = { ko: '', en: '', ja: '', fr: '', 'zh-Hans': '' };
+              const translatedSummaries: Record<LanguageCode, string> = { ko: '', en: '', ja: '', fr: '', 'zh-Hans': '' };
+              let reliability: Reliability = '알 수 없음'; // 신뢰도 기본값
+
               $(element).find('.content').each((_, contentEl) => {
                 const classList = $(contentEl).attr('class')?.split(' ') || [];
-                // 클래스 리스트에서 언어 코드를 찾습니다. (예: 'ko', 'en', 'ja')
                 const lang = classList.find(c => c !== 'content' && c !== 'active') as LanguageCode;
+
                 if (lang) {
-                  // 각 언어 블록('.content') 내부의 h3 태그에서 제목을 직접 가져옵니다.
+                  // 1. 언어별 제목 추출
                   const title = $(contentEl).find('h3 a').text().trim();
                   if (title) {
                     translatedTitles[lang] = title;
+                  }
+
+                  // 2. 언어별 요약 추출
+                  const summaryElement = $(contentEl).find('.summary');
+                  if (summaryElement.length > 0) {
+                    const reliabilitySpan = summaryElement.find('.reliability').clone();
+                    summaryElement.find('.reliability').remove(); // 신뢰도 태그 제거하여 순수 요약 텍스트 추출
+                    const summaryText = summaryElement.text().trim();
+                    translatedSummaries[lang] = summaryText || "요약 정보 없음";
+                    summaryElement.append(reliabilitySpan); // 다음 순회를 위해 원상 복구
+
+                    // 신뢰도 정보는 한 번만 추출
+                    if (reliability === '알 수 없음') {
+                        const reliabilityMatch = reliabilitySpan.text().match(/신뢰도:\s*(.*)/);
+                        if (reliabilityMatch && reliabilityMatch[1]) {
+                            reliability = reliabilityMatch[1].trim() as Reliability;
+                        }
+                    }
                   }
                 }
               });
@@ -73,10 +86,10 @@ async function getNewsFromHtml(): Promise<NewsArticle[]> {
                 link,
                 source,
                 date,
-                summary,
                 reliability,
                 translatedTitles,
-                imageUrl: imageUrl || undefined, // 추출한 이미지 URL 추가
+                translatedSummaries, // 모든 언어 요약이 포함된 객체
+                imageUrl,
                 evaluation: ''
               });
             });
@@ -100,7 +113,6 @@ export default async function HomePage() {
       <div className="container mx-auto">
         <header className="text-center py-10 bg-white">
           <h1 className="text-4xl font-extrabold text-gray-800">NewsFlow AI</h1>
-          <p className="text-lg text-gray-500 mt-2">AI와 함께하는 스마트한 뉴스 소비</p>
         </header>
 
         <LanguageSelector />
@@ -112,7 +124,7 @@ export default async function HomePage() {
         ) : (
           <div className="text-center py-20">
             <p className="text-xl text-gray-500">표시할 뉴스가 없습니다.</p>
-            <p className="text-md text-gray-400 mt-2">`newsaidi.py`를 실행하여 `public/news/` 폴더에 HTML 파일들을 생성했는지 확인해주세요.</p>
+            <p className="text-md text-gray-400 mt-2"> `public/news/` 폴더에 HTML 파일들을 생성했는지 확인해주세요.</p>
           </div>
         )}
       </div>
