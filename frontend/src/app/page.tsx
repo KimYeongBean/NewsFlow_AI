@@ -42,7 +42,7 @@ async function getNewsFromHtml(): Promise<NewsArticle[]> {
               const date = new Date(formattedDateString).toISOString();
 
               const link = $(element).find('h3 a').attr('href') || '#';
-              
+              const imageUrl = $(element).find('.article-image').attr('src');
               const summaryElement = $(element).find('.content.ko .summary');
               const reliabilitySpan = summaryElement.find('.reliability').clone();
               summaryElement.find('.reliability').remove();
@@ -75,7 +75,8 @@ async function getNewsFromHtml(): Promise<NewsArticle[]> {
                 date,
                 summary,
                 reliability,
-                translatedTitles, // 모든 언어 제목이 포함된 객체
+                translatedTitles,
+                imageUrl: imageUrl || undefined, // 추출한 이미지 URL 추가
                 evaluation: ''
               });
             });
