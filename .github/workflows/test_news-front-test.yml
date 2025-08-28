@@ -63,9 +63,9 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8E3A0412F50541DAB631B482712E5509 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_EC4606261DE54876AD730C8944D595B7 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_490D9A29948E4906B122209A2DC1B205 }}
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
@@ -74,3 +74,4 @@ jobs:
           app-name: 'news-front-test'
           slot-name: 'Production'
           package: .
+          
