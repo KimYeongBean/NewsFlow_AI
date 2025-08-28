@@ -30,10 +30,22 @@ jobs:
           npm run build
           # package build output for deployment (prebuilt)
           mkdir -p ../artifact
-          cp -r .next ../artifact/.next
-          cp -r public ../artifact/public
-          cp package.json ../artifact/package.json
-          cp next.config.js ../artifact/next.config.js || true
+          if [ -d .next ]; then
+            cp -r .next ../artifact/.next
+          else
+            echo ".next not found after build"
+          fi
+          if [ -d public ]; then
+            cp -r public ../artifact/public
+          else
+            echo "public directory not present, skipping"
+          fi
+          if [ -f package.json ]; then
+            cp package.json ../artifact/package.json
+          fi
+          if [ -f next.config.js ]; then
+            cp next.config.js ../artifact/next.config.js || true
+          fi
           cd ..
           tar -czf frontend_artifact.tar.gz artifact
 
