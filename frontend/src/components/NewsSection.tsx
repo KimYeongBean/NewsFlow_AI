@@ -34,7 +34,7 @@ export default function NewsSection({ allNews }: NewsSectionProps) {
       {/* --- 분야별 뉴스 선택 UI (상단) --- */}
       
       <section className="mb-8 px-8">
-        <h2 className="text-2xl font-bold mb-4 text-center">분야별 뉴스</h2>
+        <h2 className="text-2xl font-bold mb-4 text-center text-black">분야별 뉴스</h2>
         <div className="flex justify-center flex-wrap gap-x-4 gap-y-2">
           <button
             onClick={() => setSelectedCategory('all')}
@@ -46,7 +46,7 @@ export default function NewsSection({ allNews }: NewsSectionProps) {
           >
             전체
           </button>
-          {(Object.keys(CATEGORIES) as NewsCategory[]).map(category => (
+          {(Object.keys(CATEGORIES) as NewsCategory[]).filter(c => c !== '전체').map(category => (
             <button
               key={category}
               onClick={() => setSelectedCategory(category)}
@@ -83,7 +83,7 @@ export default function NewsSection({ allNews }: NewsSectionProps) {
 
         {/* --- 언론사별 선택 UI (오른쪽 세로 목록) --- */}
         <aside className="w-full md:w-32 flex-shrink-0">
-          <h2 className="text-xl font-bold mb-4 text-center md:text-left">언론사별</h2>
+          <h2 className="text-xl font-bold mb-4 text-center md:text-left text-black">언론사별</h2>
           <div className="flex flex-row md:flex-col flex-wrap md:flex-nowrap gap-2">
             <button
               onClick={() => setSelectedPublisher('all')}

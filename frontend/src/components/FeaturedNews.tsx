@@ -43,43 +43,25 @@ export default function FeaturedNews({ articles }: FeaturedNewsProps) {
   }
 
   return (
-    <section className="py-10 bg-gray-50 border-b border-gray-200">
+    <section className="py-12 bg-blue-400 border-b border-gray-200">
       <div className="container mx-auto px-4">
-        <h2 className="text-3xl font-bold text-center mb-8 text-gray-800">최신 뉴스</h2>
-        <div
-          ref={sliderRef}
-          className="flex flex-nowrap space-x-6 overflow-x-auto cursor-grab select-none scrollbar-hide -mx-4 px-8"
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUpOrLeave}
-          onMouseLeave={handleMouseUpOrLeave}
-        >
-          {featuredArticles.map((news) => (
-            <a
-              key={news.link}
-              href={news.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block flex-shrink-0 w-80 bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300"
-              onClick={(e) => {
-                if (sliderRef.current && Math.abs(sliderRef.current.scrollLeft - scrollLeft) > 5) {
-                  e.preventDefault();
-                }
-              }}
-            >
-              <div className="relative w-full h-40 bg-gray-200">
+        {/* 타이틀 제거 (사용자 요청) */}
+        <h2 className="sr-only">주요 뉴스</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {featuredArticles.map((news, idx) => (
+            <a key={`${news.link}-${idx}`} href={news.link} target="_blank" rel="noopener noreferrer" className="block bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden">
+              <div className="relative w-full h-44">
                 {news.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={news.imageUrl} alt={news.translatedTitles[selectedLanguage] || news.translatedTitles['ko']} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="flex items-center justify-center w-full h-full">
+                  <div className="flex items-center justify-center w-full h-full bg-gray-200">
                     <span className="text-gray-500 text-sm">이미지 없음</span>
                   </div>
                 )}
               </div>
               <div className="p-4">
-                <h3 className="font-bold text-md text-gray-800 line-clamp-2 h-12">
-                  {news.translatedTitles[selectedLanguage] || news.translatedTitles['ko']}
-                </h3>
+                <h3 className="font-bold text-md text-gray-800 line-clamp-2 h-12">{news.translatedTitles[selectedLanguage] || news.translatedTitles['ko']}</h3>
                 <p className="text-xs text-gray-500 mt-2">{news.source}</p>
               </div>
             </a>

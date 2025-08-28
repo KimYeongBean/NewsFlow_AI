@@ -63,13 +63,14 @@ export default function HomePage() {
   return (
     <LanguageProvider>
       <div className="container mx-auto">
-        <header className="text-center py-10 bg-white">
+        <header className="text-center py-6 bg-white">
           <h1 className="text-4xl font-extrabold text-gray-800">NewsFlow AI</h1>
           <p className="text-lg text-gray-500 mt-2">AI와 함께하는 스마트한 뉴스 소비</p>
         </header>
 
         <LanguageSelector />
-        <Search value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+
+        {/* 검색바는 아래(주요뉴스 아래)에 위치하도록 변경됨 */}
 
         {isLoading ? (
           <div className="text-center py-20">
@@ -77,7 +78,17 @@ export default function HomePage() {
           </div>
         ) : (
           <>
+            {/* FeaturedNews는 상단에 위치 */}
             <FeaturedNews articles={filteredNews} />
+
+            {/* 검색바를 주요뉴스 바로 아래에 배치: 아래 배경과 통일하고 바로 붙도록 조정 */}
+            <div className="w-full bg-gray-50 py-6 mt-0 -mt-6">
+              <div className="max-w-3xl mx-auto">
+                <div className="p-2">
+                  <Search value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                </div>
+              </div>
+            </div>
             {filteredNews.length > 0 ? (
               <NewsSection allNews={filteredNews} />
             ) : (
