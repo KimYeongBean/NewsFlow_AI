@@ -24,23 +24,18 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Create and start virtual environment
+      - name: Install dependencies
+        working-directory: ./backend # <-- 1. 수정: 작업 폴더를 backend로 지정
         run: |
           python -m venv venv
           source venv/bin/activate
+          pip install -r requirements.txt
       
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-        
-      # Optional: Add step to run tests here (PyTest, Django test suites, etc.)
-
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
         with:
           name: python-app
-          path: |
-            .
-            !venv/
+          path: ./backend
 
   deploy:
     runs-on: ubuntu-latest
@@ -68,4 +63,5 @@ jobs:
         with:
           app-name: 'news-web-test'
           slot-name: 'Production'
+
           
