@@ -67,8 +67,14 @@ export default function FeaturedNews({ articles }: FeaturedNewsProps) {
                 }
               }}
             >
-              <div className="relative w-full h-40 bg-gray-300 flex items-center justify-center">
-                <span className="text-gray-500 text-sm">이미지 없음</span>
+              <div className="relative w-full h-40 bg-gray-200">
+                {news.imageUrl ? (
+                  <img src={news.imageUrl} alt={news.translatedTitles[selectedLanguage] || news.translatedTitles['ko']} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="flex items-center justify-center w-full h-full">
+                    <span className="text-gray-500 text-sm">이미지 없음</span>
+                  </div>
+                )}
               </div>
               <div className="p-4">
                 <h3 className="font-bold text-md text-gray-800 line-clamp-2 h-12">
