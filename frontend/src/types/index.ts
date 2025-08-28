@@ -22,7 +22,7 @@ export type LanguageCode = 'ko' | 'en' | 'ja' | 'fr' | 'zh-Hans';
 /**
  * 뉴스 대분류 카테고리 타입
  */
-export type NewsCategory = '정치' | '경제' | '사회' | 'IT_과학' | '생활_문화' | '세계' | '여행';
+export type NewsCategory = '전체' | '정치' | '경제' | '사회' | 'IT_과학' | '생활_문화' | '세계' | '여행';
 
 /**
  * 뉴스 소분류 카테고리 타입
@@ -47,6 +47,7 @@ export type NewsSubCategory =
  * 앱 전체에서 사용할 카테고리 구조 데이터
  */
 export const CATEGORIES: { readonly [key in NewsCategory]: readonly NewsSubCategory[] } = {
+  '전체': [],
   '정치': ['대통령실', '국회', '정당', '행정', '외교', '국방/북한'],
   '경제': ['금융/증권', '산업/재계', '중기/벤처', '부동산', '글로벌', '생활'],
   '사회': ['사건사고', '교육', '노동', '언론', '환경', '인권/복지', '식품/의료', '지역', '인물'],
@@ -66,6 +67,7 @@ export type NewsArticle = {
   
   // ▼▼▼ [수정] 단일 제목(title) 대신 다국어 제목 객체(translatedTitles)를 사용합니다. ▼▼▼
   translatedTitles: Record<LanguageCode, string>;
+  imageUrl?: string;
   // ▲▲▲ [수정] ▲▲▲
 
   link: string;
