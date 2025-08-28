@@ -1,95 +1,81 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
-name: Build and deploy Node.js app to Azure Web App - news-front-test
+name: Build and Deploy Next.js to Azure
 
 on:
   push:
-    branches:
-      - test
-  workflow_dispatch:
+    branches: test
+  pull_request:
+    branches: test
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read #This is required for actions/checkout
-
+    
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node.js version
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20.x'
-
-      - name: Install dependencies and build
-        working-directory: ./frontend
-        run: |
-          npm ci
-          npm run build
-          # package build output for deployment (prebuilt)
-          mkdir -p ../artifact
-          if [ -d .next ]; then
-            cp -r .next ../artifact/.next
-          else
-            echo ".next not found after build"
-          fi
-          if [ -d public ]; then
-            cp -r public ../artifact/public
-          else
-            echo "public directory not present, skipping"
-          fi
-          if [ -f package.json ]; then
-            cp package.json ../artifact/package.json
-          fi
-          if [ -f next.config.js ]; then
-            cp next.config.js ../artifact/next.config.js || true
-          fi
-          # create zip with artifact contents at root of zip (no top-level 'artifact' folder)
-          if [ -d artifact ]; then
-            cd artifact
-            zip -r ../frontend_artifact.zip .
-            cd ..
-          else
-            echo "artifact directory missing"
-          fi
-          echo "Zip contents:" 
-          unzip -l frontend_artifact.zip || true
-
-      - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v4
-        with:
-          name: node-app
-          path: |
-            frontend_artifact.zip
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Build Next.js application
+      run: npm run build
+      
+    # 빌드 결과물 확인 (디버깅용)
+    - name: List build files
+      run: |
+        ls -la
+        ls -la .next/
+        
+    # standalone 빌드인 경우 추가
+    - name: Copy standalone files (if using standalone)
+      run: |
+        if [ -d ".next/standalone" ]; then
+          cp -r .next/standalone/* ./
+          cp -r public .next/standalone/
+          cp -r .next/static .next/standalone/.next/
+        fi
+    
+    # v4 사용하여 아티팩트 업로드
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: nextjs-build
+        path: |
+          .next/
+          public/
+          package.json
+          package-lock.json
+          next.config.js
+        retention-days: 1
 
   deploy:
-    runs-on: ubuntu-latest
     needs: build
-    permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
-
+    runs-on: ubuntu-latest
+    environment: production
+    
     steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v4
-        with:
-          name: node-app
-          path: .
-      
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8E3A0412F50541DAB631B482712E5509 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_EC4606261DE54876AD730C8944D595B7 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_490D9A29948E4906B122209A2DC1B205 }}
-
-      - name: 'Deploy to Azure Web App'
-        id: deploy-to-webapp
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: 'news-front-test'
-          slot-name: 'Production'
-          package: ./frontend_artifact.zip
-          
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: nextjs-build
+        path: ./
+    
+    # 배포용 압축 파일 생성
+    - name: Create deployment package
+      run: |
+        # .next 폴더가 포함되도록 압축
+        zip -r frontend_artifact.zip . -x "*.git*" "node_modules/*"
+        ls -la *.zip
+    
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: './frontend_artifact.zip'  # .tar.gz 대신 .zip 사용
