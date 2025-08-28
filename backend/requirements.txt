@@ -10,3 +10,9 @@ feedparser
 
 # Azure OpenAI SDK
 openai
+
+# Azure Cosmos DB SDK
+azure-cosmos
+
+# .env 파일 로드
+python-dotenv
