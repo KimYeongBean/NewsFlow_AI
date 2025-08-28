@@ -8,6 +8,8 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'function/**'  # function 폴더에 변경이 있을 때만 실행
   workflow_dispatch:
 
 env:
@@ -82,4 +84,5 @@ jobs:
           app-name: 'news-function'
           slot-name: 'Production'
           package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+
           
