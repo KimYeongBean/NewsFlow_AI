@@ -43,12 +43,11 @@ export default function FeaturedNews({ articles }: FeaturedNewsProps) {
   }
 
   return (
-    <section className="py-10 bg-gray-50 border-b border-gray-200">
+    <section className="py-10 bg-blue-400 border-b border-gray-200">
       <div className="container mx-auto px-4">
-        <h2 className="text-3xl font-bold text-center mb-8 text-gray-800">최신 뉴스</h2>
         <div
           ref={sliderRef}
-          className="flex flex-nowrap space-x-6 overflow-x-auto cursor-grab select-none scrollbar-hide -mx-4 px-8"
+          className="flex flex-nowrap space-x-6 overflow-x-auto cursor-grab select-none scrollbar-hide -mx-4 px-22"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUpOrLeave}
