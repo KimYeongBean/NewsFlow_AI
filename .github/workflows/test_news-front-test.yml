@@ -66,5 +66,5 @@ jobs:
         with:
           app-name: 'news-front-test'
           slot-name: 'Production'
-          package: .
+          package: ./frontend
           
