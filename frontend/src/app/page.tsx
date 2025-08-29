@@ -13,7 +13,7 @@ import Search from '@/components/Search'; // Search 컴포넌트 import
  * 백엔드 API에서 뉴스 데이터를 가져오는 함수
  */
 async function getNewsFromApi(): Promise<NewsArticle[]> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
   try {
     const res = await fetch(`${apiUrl}/api/news`, { cache: 'no-store' });
