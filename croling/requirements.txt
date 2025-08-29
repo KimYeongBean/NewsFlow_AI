@@ -1,0 +1,5 @@
+# requirements.txt
+
+# 브라우저 자동화 및 웹 스크래핑 라이브러리
+selenium
+webdriver-manager
