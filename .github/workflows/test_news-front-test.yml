@@ -27,11 +27,24 @@ jobs:
         with:
           node-version: '20.x'
 
+                # --- 👇 이 캐시 단계를 추가하세요 👇 ---
+      - name: Cache node_modules
+        id: cache-npm
+        uses: actions/cache@v4
+        with:
+          # 캐시할 폴더의 경로
+          path: frontend/node_modules
+          # 캐시를 식별하는 고유 키. lock 파일이 바뀌면 키도 바뀝니다.
+          key: ${{ runner.os }}-npm-${{ hashFiles('frontend/package-lock.json') }}
+          # 이전 캐시를 복원하기 위한 키
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
       - name: Install dependencies and build
-        # frontend 폴더로 이동해서 명령어 실행
         working-directory: ./frontend
         run: |
-          npm install
+          # 캐시가 없는 경우에만 npm ci 실행 (캐시가 있으면 이 단계는 거의 즉시 끝남)
+          npm ci
           npm run build
 
       - name: Upload artifact for deployment job
