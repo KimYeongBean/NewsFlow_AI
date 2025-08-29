@@ -1,6 +1,7 @@
 "use client";
 
 import { FaSearch } from 'react-icons/fa';
+import { useTranslation } from 'react-i18next';
 
 interface SearchProps {
   value: string;
@@ -8,6 +9,8 @@ interface SearchProps {
 }
 
 export default function Search({ value, onChange }: SearchProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="relative mb-6 flex justify-center">
       <div className="w-full max-w-2xl relative">
@@ -18,8 +21,9 @@ export default function Search({ value, onChange }: SearchProps) {
           type="text"
           value={value}
           onChange={onChange}
+          placeholder={t('search_news_placeholder')}
           className="w-full pl-12 pr-4 py-3 bg-transparent border border-gray-300 rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-600 transition-shadow text-sm"
-          aria-label="Search news"
+          aria-label={t('search_news_label')}
         />
       </div>
     </div>

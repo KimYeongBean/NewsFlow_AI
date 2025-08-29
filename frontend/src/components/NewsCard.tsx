@@ -15,15 +15,15 @@ const formatDate = (dateString: string) => {
 const getReliabilityClass = (reliability: Reliability) => {
   switch (reliability) {
     case '높음':
-      return 'text-green-600';
+      return 'bg-green-500';
     case '보통':
-      return 'text-yellow-600';
+      return 'bg-yellow-500';
     case '낮음':
-      return 'text-red-600';
+      return 'bg-red-500';
     case '알 수 없음':
-      return 'text-gray-400';
+      return 'bg-gray-400';
     default:
-      return 'text-gray-500';
+      return 'bg-gray-500';
   }
 };
 

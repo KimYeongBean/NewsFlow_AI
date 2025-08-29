@@ -1,0 +1,14 @@
+{
+  "select_language": "Sélectionner la langue:",
+  "featured_news": "Nouvelles en vedette",
+  "no_image": "Pas d'image",
+  "news_by_category": "Nouvelles par catégorie",
+  "all": "Tout",
+  "by_publisher": "Par éditeur",
+  "search_news_placeholder": "Rechercher des nouvelles...",
+  "search_news_label": "Rechercher des nouvelles",
+  "subtitle": "Consommation de nouvelles intelligente avec l'IA",
+  "loading": "Chargement des nouvelles...",
+  "no_news": "Aucune nouvelle à afficher.",
+  "no_news_description": "Veuillez vérifier si le serveur backend fonctionne ou si les données d'actualités ont été collectées avec succès."
+}

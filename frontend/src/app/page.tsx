@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { NewsArticle } from '@/types';
+import { useTranslation } from 'react-i18next';
 
 // 컴포넌트 import
 import NewsSection from '@/components/NewsSection';
 import FeaturedNews from '@/components/FeaturedNews';
-import LanguageSelector, { LanguageProvider } from '@/components/LanguageSelector';
+import LanguageSelector from '@/components/LanguageSelector';
 import Search from '@/components/Search'; // Search 컴포넌트 import
 
 /**
@@ -34,6 +35,7 @@ async function getNewsFromApi(): Promise<NewsArticle[]> {
 }
 
 export default function HomePage() {
+  const { t } = useTranslation();
   const [allNews, setAllNews] = useState<NewsArticle[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -61,45 +63,43 @@ export default function HomePage() {
   );
 
   return (
-    <LanguageProvider>
-      <div className="container mx-auto">
-        <header className="text-center py-6 bg-white">
-          <h1 className="text-4xl font-extrabold text-gray-800">NewsFlow AI</h1>
-          <p className="text-lg text-gray-500 mt-2">AI와 함께하는 스마트한 뉴스 소비</p>
-        </header>
+    <div className="container mx-auto">
+      <header className="text-center py-6 bg-white">
+        <h1 className="text-4xl font-extrabold text-gray-800">NewsFlow AI</h1>
+        <p className="text-lg text-gray-500 mt-2">{t('subtitle')}</p>
+      </header>
 
-        <LanguageSelector />
+      <LanguageSelector />
 
-        {/* 검색바는 아래(주요뉴스 아래)에 위치하도록 변경됨 */}
+      {/* 검색바는 아래(주요뉴스 아래)에 위치하도록 변경됨 */}
 
-        {isLoading ? (
-          <div className="text-center py-20">
-            <p className="text-xl text-gray-500">뉴스를 불러오는 중입니다...</p>
-          </div>
-        ) : (
-          <>
-            {/* FeaturedNews는 상단에 위치 */}
-            <FeaturedNews articles={filteredNews} />
+      {isLoading ? (
+        <div className="text-center py-20">
+          <p className="text-xl text-gray-500">{t('loading')}</p>
+        </div>
+      ) : (
+        <>
+          {/* FeaturedNews는 상단에 위치 */}
+          <FeaturedNews articles={filteredNews} />
 
-            {/* 검색바를 주요뉴스 바로 아래에 배치: 아래 배경과 통일하고 바로 붙도록 조정 */}
-            <div className="w-full bg-gray-50 py-6 mt-0 -mt-6">
-              <div className="max-w-3xl mx-auto">
-                <div className="p-2">
-                  <Search value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                </div>
+          {/* 검색바를 주요뉴스 바로 아래에 배치: 아래 배경과 통일하고 바로 붙도록 조정 */}
+          <div className="w-full bg-gray-50 py-6 mt-0 -mt-6">
+            <div className="max-w-3xl mx-auto">
+              <div className="p-2">
+                <Search value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
               </div>
             </div>
-            {filteredNews.length > 0 ? (
-              <NewsSection allNews={filteredNews} />
-            ) : (
-              <div className="text-center py-20">
-                <p className="text-xl text-gray-500">표시할 뉴스가 없습니다.</p>
-                <p className="text-md text-gray-400 mt-2">백엔드 서버가 실행 중인지, 또는 뉴스 데이터가 정상적으로 수집되었는지 확인해주세요.</p>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </LanguageProvider>
+          </div>
+          {filteredNews.length > 0 ? (
+            <NewsSection allNews={filteredNews} />
+          ) : (
+            <div className="text-center py-20">
+              <p className="text-xl text-gray-500">{t('no_news')}</p>
+              <p className="text-md text-gray-400 mt-2">{t('no_news_description')}</p>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }

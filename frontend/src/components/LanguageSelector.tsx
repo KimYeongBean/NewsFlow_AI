@@ -1,7 +1,9 @@
 "use client";
 
-import { createContext, useState, useContext, ReactNode } from 'react';
+import { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { LanguageCode } from '@/types';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n'; // Import the i18n instance
 
 // --- Context Definition ---
 
@@ -25,7 +27,21 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 // --- Context Provider ---
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [selectedLanguage, setSelectedLanguage] = useState<LanguageCode>('ko');
+  const [selectedLanguage, setSelectedLanguageState] = useState<LanguageCode>(i18n.language as LanguageCode);
+
+  useEffect(() => {
+    const handleLanguageChanged = (lng: string) => {
+      setSelectedLanguageState(lng as LanguageCode);
+    };
+    i18n.on('languageChanged', handleLanguageChanged);
+    return () => {
+      i18n.off('languageChanged', handleLanguageChanged);
+    };
+  }, []);
+
+  const setSelectedLanguage = (language: LanguageCode) => {
+    i18n.changeLanguage(language);
+  };
 
   const value = {
     selectedLanguage,
@@ -54,11 +70,12 @@ export function useLanguage() {
 
 export default function LanguageSelector() {
   const { selectedLanguage, setSelectedLanguage, supportedLanguages } = useLanguage();
+  const { t } = useTranslation();
 
   return (
     <section className="bg-white py-4 border-b shadow-sm sticky top-0 z-10">
       <div className="flex justify-center items-center space-x-4">
-        <span className="font-semibold text-gray-700">언어 선택:</span>
+        <span className="font-semibold text-gray-700">{t('select_language')}</span>
         {supportedLanguages.map(({ code, name }) => (
           <button
             key={code}

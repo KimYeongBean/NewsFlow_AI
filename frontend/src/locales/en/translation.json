@@ -1,0 +1,14 @@
+{
+  "select_language": "Select Language:",
+  "featured_news": "Featured News",
+  "no_image": "No Image",
+  "news_by_category": "News by Category",
+  "all": "All",
+  "by_publisher": "By Publisher",
+  "search_news_placeholder": "Search news...",
+  "search_news_label": "Search news",
+  "subtitle": "Smart news consumption with AI",
+  "loading": "Loading news...",
+  "no_news": "No news to display.",
+  "no_news_description": "Please check if the backend server is running, or if news data has been collected successfully."
+}

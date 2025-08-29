@@ -2,13 +2,15 @@
 
 import { useRef, useState, MouseEvent } from 'react';
 import { NewsArticle } from '@/types';
-import { useLanguage } from '@/components/LanguageSelector'; // 경로 수정
+import { useLanguage } from '@/components/LanguageSelector';
+import { useTranslation } from 'react-i18next';
 
 interface FeaturedNewsProps {
   articles: NewsArticle[];
 }
 
 export default function FeaturedNews({ articles }: FeaturedNewsProps) {
+  const { t } = useTranslation();
   const featuredArticles = articles.slice(0, 4);
   const { selectedLanguage } = useLanguage();
   const sliderRef = useRef<HTMLDivElement>(null);
@@ -46,7 +48,7 @@ export default function FeaturedNews({ articles }: FeaturedNewsProps) {
     <section className="py-12 bg-blue-400 border-b border-gray-200">
       <div className="container mx-auto px-4">
         {/* 타이틀 제거 (사용자 요청) */}
-        <h2 className="sr-only">주요 뉴스</h2>
+        <h2 className="sr-only">{t('featured_news')}</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {featuredArticles.map((news, idx) => (
             <a key={`${news.link}-${idx}`} href={news.link} target="_blank" rel="noopener noreferrer" className="block bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden">
@@ -56,7 +58,7 @@ export default function FeaturedNews({ articles }: FeaturedNewsProps) {
                   <img src={news.imageUrl} alt={news.translatedTitles[selectedLanguage] || news.translatedTitles['ko']} className="w-full h-full object-cover" />
                 ) : (
                   <div className="flex items-center justify-center w-full h-full bg-gray-200">
-                    <span className="text-gray-500 text-sm">이미지 없음</span>
+                    <span className="text-gray-500 text-sm">{t('no_image')}</span>
                   </div>
                 )}
               </div>

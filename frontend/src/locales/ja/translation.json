@@ -1,0 +1,14 @@
+{
+  "select_language": "言語選択:",
+  "featured_news": "主なニュース",
+  "no_image": "画像なし",
+  "news_by_category": "分野別ニュース",
+  "all": "すべて",
+  "by_publisher": "出版社別",
+  "search_news_placeholder": "ニュース検索...",
+  "search_news_label": "ニュース検索",
+  "subtitle": "AIと共にスマートなニュース消費",
+  "loading": "ニュースを読み込んでいます...",
+  "no_news": "表示するニュースがありません。",
+  "no_news_description": "バックエンドサーバーが実行中であるか、ニュースデータが正常に収集されたか確認してください。"
+}

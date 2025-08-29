@@ -1,0 +1,14 @@
+{
+  "select_language": "选择语言:",
+  "featured_news": "主要新闻",
+  "no_image": "没有图片",
+  "news_by_category": "按类别分类的新闻",
+  "all": "全部",
+  "by_publisher": "按出版社",
+  "search_news_placeholder": "搜索新闻...",
+  "search_news_label": "搜索新闻",
+  "subtitle": "与AI一起智能消费新闻",
+  "loading": "正在加载新闻...",
+  "no_news": "没有要显示的新闻。",
+  "no_news_description": "请检查后端服务器是否正在运行，或者新闻数据是否已成功收集。"
+}

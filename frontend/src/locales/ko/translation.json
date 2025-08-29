@@ -1,0 +1,14 @@
+{
+  "select_language": "언어 선택:",
+  "featured_news": "주요 뉴스",
+  "no_image": "이미지 없음",
+  "news_by_category": "분야별 뉴스",
+  "all": "전체",
+  "by_publisher": "언론사별",
+  "search_news_placeholder": "뉴스 검색...",
+  "search_news_label": "뉴스 검색",
+  "subtitle": "AI와 함께하는 스마트한 뉴스 소비",
+  "loading": "뉴스를 불러오는 중입니다...",
+  "no_news": "표시할 뉴스가 없습니다.",
+  "no_news_description": "백엔드 서버가 실행 중인지, 또는 뉴스 데이터가 정상적으로 수집되었는지 확인해주세요."
+}
