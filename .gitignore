@@ -2,3 +2,4 @@ node_modules
 main (1).py
 .env
 .next
+.env.local
